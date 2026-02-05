@@ -1,22 +1,6 @@
 version: '3.8'
 
 services:
-  traefik:
-    image: traefik:v3.1
-    command:
-      - --api.insecure=true
-      - --api.dashboard=true
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-    ports:
-      - "80:80"
-      - "8080:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - fishing-network
-
   postgres:
     image: postgres:16-alpine
     environment:
@@ -26,6 +10,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "5432:5432"
     networks:
       - fishing-network
 
@@ -41,6 +27,8 @@ services:
     build:
       context: ./services/auth-service
       dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -48,19 +36,20 @@ services:
       ALGORITHM: ${ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      EMAIL_SERVICE_URL: http://email-service:8005
     networks:
       - fishing-network
     depends_on:
       - postgres
       - redis
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.auth-service.rule=PathPrefix(`/api/v1/auth`, `/api/v1/users`)"
+      - email-service
 
   places-service:
     build:
       context: ./services/places-service
       dockerfile: Dockerfile
+    ports:
+      - "8002:8000"
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -70,14 +59,13 @@ services:
     depends_on:
       - postgres
       - redis
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.places-service.rule=PathPrefix(`/api/v1/places`)"
 
   reports-service:
     build:
       context: ./services/reports-service
       dockerfile: Dockerfile
+    ports:
+      - "8003:8000"
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -89,14 +77,13 @@ services:
     depends_on:
       - postgres
       - redis
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.reports-service.rule=PathPrefix(`/api/v1/reports`)"
 
   booking-service:
     build:
       context: ./services/booking-service
       dockerfile: Dockerfile
+    ports:
+      - "8004:8000"
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -107,14 +94,13 @@ services:
     depends_on:
       - postgres
       - redis
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.booking-service.rule=PathPrefix(`/api/v1/bookings`, `/api/v1/booking-slots`)"
 
   shop-service:
     build:
       context: ./services/shop-service
       dockerfile: Dockerfile
+    ports:
+      - "8005:8000"
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
@@ -125,23 +111,35 @@ services:
     depends_on:
       - postgres
       - redis
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.shop-service.rule=PathPrefix(`/api/v1/shop`, `/api/v1/orders`)"
+
+  email-service:
+    build:
+      context: ./services/email-service
+      dockerfile: Dockerfile
+    ports:
+      - "8006:8005"
+    environment:
+      SMTP_HOST: ${SMTP_HOST:-smtp.yandex.ru}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-FishMap}
+    networks:
+      - fishing-network
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://localhost
       NEXT_PUBLIC_MAPBOX_API_KEY: ${MAPBOX_API_KEY}
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
     networks:
       - fishing-network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
 
 networks:
   fishing-network:
