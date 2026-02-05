@@ -86,6 +86,11 @@ Single shared database for all microservices with the following tables.
 │                        Ratings Table                                        │
 │  id (PK) | user_id | report_id | place_id | rating | comment               │
 └─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│               EmailVerificationCodes Table                                  │
+│  id (PK) | email | code | attempts | expires_at | created_at               │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Tables
@@ -258,6 +263,18 @@ Refresh токены (Auth Service)
 | comment | TEXT | | Комментарий |
 | created_at | TIMESTAMP | default NOW() | Дата создания |
 
+### 12. email_verification_codes
+Коды подтверждения email (Auth Service)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | UUID | PK, default gen() | Уникальный идентификатор |
+| email | VARCHAR(255) | NOT NULL | Email адрес |
+| code | VARCHAR(6) | NOT NULL | Код подтверждения (6 цифр) |
+| attempts | INTEGER | default 0 | Количество попыток |
+| expires_at | TIMESTAMP | NOT NULL | Дата истечения кода |
+| created_at | TIMESTAMP | default NOW() | Дата создания |
+
 ## Indexes
 
 ### Performance Indexes
@@ -274,6 +291,8 @@ CREATE INDEX idx_booking_slots_place_date ON booking_slots(place_id, date);
 CREATE INDEX idx_products_category ON products(category_id);
 CREATE INDEX idx_orders_user ON orders(user_id);
 CREATE INDEX idx_ratings_user ON ratings(user_id);
+CREATE INDEX idx_email_verification_codes_email ON email_verification_codes(email);
+CREATE INDEX idx_email_verification_codes_expires ON email_verification_codes(expires_at);
 ```
 
 ### JSONB Indexes
