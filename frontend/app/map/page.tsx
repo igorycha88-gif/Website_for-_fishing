@@ -1,30 +1,61 @@
-import { MapPin, Plus } from "lucide-react";
+"use client";
+
+import { useAuthStore } from "@/app/stores/useAuthStore";
+import YandexMap from "@/components/YandexMap";
+import { MapPin } from "lucide-react";
 
 export default function MapPage() {
+  const { isAuthenticated, user } = useAuthStore();
+
+  const handleRegisterClick = () => {
+    window.location.href = "/register";
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-4xl font-bold text-primary-deepBlue mb-4">
-          Карта мест для рыбалки
-        </h1>
-        <p className="text-gray-600 mb-8">
-          Здесь будет интерактивная карта с Yandex Maps JS API
-        </p>
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-primary-deepBlue mb-2 flex items-center gap-3">
+            <MapPin className="w-10 h-10 text-primary-sea" />
+            Карта мест для рыбалки
+          </h1>
+          <p className="text-gray-600">
+            {isAuthenticated
+              ? user?.city
+                ? `Карта мест для рыбалки в городе ${user.city}`
+                : "Укажите ваш город в настройках для персонализации карты"
+              : "Зарегистрируйтесь для просмотра публичных мест рыбалки"}
+          </p>
+        </div>
 
-        <div className="bg-white rounded-2xl p-8 shadow-lg min-h-[600px] flex items-center justify-center">
-          <div className="text-center">
-            <MapPin className="w-24 h-24 text-primary-sea mx-auto mb-4" />
-            <h2 className="text-2xl font-semibold text-primary-deepBlue mb-2">
-              Модуль в разработке
-            </h2>
-            <p className="text-gray-600 mb-6">
-              Скоро здесь появится интерактивная карта с возможностью:
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+          <YandexMap
+            city={isAuthenticated ? user?.city : null}
+            blurred={!isAuthenticated}
+            onRegisterClick={handleRegisterClick}
+          />
+        </div>
+
+        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-xl p-6 shadow-md">
+            <h3 className="text-lg font-semibold text-primary-deepBlue mb-2">Поиск мест</h3>
+            <p className="text-gray-600 text-sm">
+              Интерактивная карта поможет вам найти лучшие места для рыбалки
             </p>
-            <ul className="text-left max-w-md mx-auto space-y-2 text-gray-600">
-              <li>• Просмотр карты с Yandex Maps JS API</li>
-              <li>• Добавление точек для рыбалки</li>
-              <li>• Экспорт в GeoJSON/CSV</li>
-            </ul>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-md">
+            <h3 className="text-lg font-semibold text-primary-deepBlue mb-2">Радиус поиска</h3>
+            <p className="text-gray-600 text-sm">
+              Карта показывает места в радиусе 25 км от вашего города
+            </p>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-md">
+            <h3 className="text-lg font-semibold text-primary-deepBlue mb-2">Персонализация</h3>
+            <p className="text-gray-600 text-sm">
+              Укажите ваш город в настройках для точного отображения мест
+            </p>
           </div>
         </div>
       </div>
