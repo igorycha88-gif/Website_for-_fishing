@@ -1,0 +1,428 @@
+# Системный промпт - Платформа для рыбалки
+
+## Основная информация
+**Проект:** Микросервисная платформа для рыболовов, объединяющая каталог мест, отчеты, бронирование и магазин снастей.
+
+## Технологический стек
+- **Frontend:** Next.js 15 (TypeScript), Tailwind CSS, Zustand
+- **Backend:** Python/FastAPI (асинхронный), PostgreSQL, Redis
+- **Инфраструктура:** Docker Swarm, Traefik
+- **Внешние сервисы:** Mapbox, Stripe, Cloudinary
+
+## Архитектура микросервисов
+6 независимых сервисов:
+
+| Сервис | Контейнерный порт | Хост порт (dev) | Ответственность |
+|--------|-------------------|-----------------|-----------------|
+| Auth | 8000 | 8001 | Регистрация, вход, JWT-аутентификация |
+| Places | 8001 | 8002 | Каталог рыболовных мест с картой |
+| Reports | 8002 | 8003 | Отчеты о рыбалке с фото |
+| Booking | 8003 | 8004 | Бронирование мест, слоты, платежи |
+| Shop | 8004 | 8005 | Магазин снастей, заказы |
+| Email | 8005 | 8006 | Email-уведомления |
+
+**Frontend API проксирование:**
+- Локальная разработка: Next.js rewrites проксируют `/api/v1/*` к сервисам через порты хоста (host.docker.internal)
+- Production: Traefik маршрутизирует запросы по правилам PathPrefix
+
+**Общая база данных:** PostgreSQL для всех сервисов.
+
+## Ключевые сущности БД
+- **users:** Пользователи (email, username, хэш пароля, role в SQLAlchemy модели)
+- **places:** Места для рыбалки (координаты, цена, удобства)
+- **reports:** Отчеты (фото, виды рыб, погода)
+- **bookings:** Бронирования (даты, статус, оплата)
+- **products:** Товары магазина
+- **orders:** Заказы из магазина
+
+**Идентификаторы:** UUID для всех записей.
+
+## Аутентификация
+
+### JWT Токены
+- **Access token:** JWT, 30 минут, в заголовке Authorization
+- **Refresh token:** 7 дней, HTTP-only cookie (функционал в разработке)
+- **Роли пользователей:** user (по умолчанию), moderator, admin (определено в коде, но не реализовано)
+- **Хеширование паролей:** pbkdf2_sha256
+
+### Текущее состояние JWT
+```python
+# Фактически в коде (auth.py lines 130, 176):
+access_token = create_access_token(data={"sub": str(user.id)})
+# Роль НЕ включена в токен
+```
+
+### Текущее состояние RBAC
+- Поле `role` существует в SQLAlchemy модели User (String(20), default='user')
+- Поле `role` НЕ существует в database/schema.sql
+- RBAC проверки НЕ реализованы в коде
+- Admin endpoints НЕ реализованы
+
+## Развертывание и порты
+
+### Локальная разработка
+```bash
+docker-compose -f docker-compose.dev.yml up -d
+```
+
+**Порты хоста:**
+- Frontend: 3000
+- Auth: 8001
+- Places: 8002
+- Reports: 8003
+- Booking: 8004
+- Shop: 8005
+- Email: 8006
+
+**API проксирование:**
+- Next.js использует rewrites (next.config.js) для проксирования API запросов к микросервисам
+- Все API запросы через /api/v1/* направляются на соответствующие сервисы
+- NEXT_PUBLIC_API_URL должен быть установлен в http://localhost:3000 для локальной разработки
+
+### Правила конфигурации портов (фактическое состояние)
+**ПРИМЕЧАНИЕ:** В настоящее время правило `Dockerfile.CMD_PORT` = `CONTAINER_PORT` нарушено для некоторых сервисов.
+
+| Сервис | Dockerfile CMD | dev CONTAINER_PORT | Соответствие |
+|--------|----------------|-------------------|--------------|
+| Auth | 8000 | 8000 | ✅ |
+| Places | 8001 | 8000 | ❌ |
+| Reports | 8002 | 8000 | ❌ |
+| Booking | 8003 | 8000 | ❌ |
+| Shop | 8004 | 8000 | ❌ |
+| Email | 8005 | 8005 | ✅ |
+
+**Фактические примеры:**
+```
+# Auth (правильно):
+Dockerfile: CMD ["--port", "8000"]
+docker-compose.dev.yml: ports: ["8001:8000"]
+
+# Places (НЕПРАВИЛЬНО):
+Dockerfile: CMD ["--port", "8001"]
+docker-compose.dev.yml: ports: ["8002:8000"]  # Контейнерный порт 8000 != CMD 8001
+```
+
+### Production (docker-compose.yml)
+- Traefik маршрутизирует запросы по правилам PathPrefix
+- Health checks на /health endpoints
+- Каждая служба имеет 2+ replicas
+- Email Service отсутствует в docker-compose.yml (добавлен только в dev)
+
+## Frontend структура
+- **Фреймворк:** Next.js 15 с App Router
+- **Проксирование API:**
+  - Локальная разработка: Next.js rewrites проксируют `/api/v1/*` → сервисы через `host.docker.internal`
+  - Production: Traefik маршрутизирует запросы по PathPrefix
+- **API конфигурация:** `NEXT_PUBLIC_API_URL` должен указывать на URL фронтенда (http://localhost:3000 в dev)
+- **Управление состоянием:** Zustand stores
+- **Стили:** Tailwind CSS с компонентами shadcn/ui
+
+## Переменные окружения (.env.example)
+
+```bash
+# Database
+POSTGRES_DB=fishing_db
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres_password
+DATABASE_URL=postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db
+
+# Redis
+REDIS_URL=redis://redis:6379/0
+
+# Auth Service
+SECRET_KEY=your-secret-key-change-in-production-min-32-chars
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# Mapbox
+MAPBOX_API_KEY=your_mapbox_api_key
+
+# Cloudinary
+CLOUDINARY_CLOUD_NAME=your_cloudinary_cloud_name
+CLOUDINARY_API_KEY=your_cloudinary_api_key
+CLOUDINARY_API_SECRET=your_cloudinary_api_secret
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
+STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# Traefik
+TRAEFIK_DASHBOARD_CREDENTIALS=your_dashboard_credentials
+
+# Environment
+ENVIRONMENT=development
+```
+
+**ПРИМЕЧАНИЕ:** SMTP_* переменные используются в docker-compose.dev.yml, но отсутствуют в .env.example
+
+## Процесс разработки
+
+### 1. Проектирование перед кодом
+- Анализ требований → архитектурное решение → дизайн API → согласование
+- **Новый микросервис ТОЛЬКО при:**
+  - Четко выделенной бизнес-области
+  - Требованиях к независимому масштабированию
+  - Разных циклах разработки от существующих сервисов
+
+### 2. Планирование реализации (TODO список)
+Пример для новой функции:
+```
+[ ] 0. Архитектурное решение
+[ ] 1. Бэкенд: модели/схемы (включая миграции БД)
+[ ] 2. Бэкенд: эндпоинты
+[ ] 3. Фронтенд: UI компоненты
+[ ] 4. Тестирование
+[ ] 5. Документация
+[ ] 6. Деплой и проверка
+```
+
+### 3. Обязательное тестирование
+- **Unit тесты:** ≥80% покрытие новой логики
+- **Интеграционные тесты:** API, БД, внешние сервисы
+- **E2E тесты:** Новые сценарии в Cypress/Playwright
+- **Перед коммитом:** Все тесты должны проходить
+
+### 4. Проверка перед коммитом
+```bash
+# 1. Линтинг
+ruff check .  # Python
+npm run lint  # Frontend
+
+# 2. Тесты
+pytest --cov
+npm test
+
+# 3. Проверка сборки
+docker-compose build
+
+# 4. Запуск в dev среде
+docker-compose -f docker-compose.dev.yml up -d
+curl http://localhost:8001/health  # Проверка health checks
+```
+
+### 5. Информативный коммит
+```bash
+git commit -m "feat(places): добавить прогноз клева
+- Добавлена модель WeatherData с миграцией
+- Новый endpoint GET /api/v1/places/{id}/forecast
+- Интеграция с OpenWeather API
+- Кэширование в Redis на 24 часа
+- Компонент ForecastCard на фронтенде
+Tests: 12 unit-тестов, 3 интеграционных теста
+Closes #123"
+```
+
+## API Эндпоинты (фактическое состояние)
+
+### Auth Service (Порт 8000 конт, 8001 хост)
+- `POST /api/v1/auth/register` - Регистрация пользователя ✅
+- `POST /api/v1/auth/login` - Вход пользователя ✅
+- `POST /api/v1/auth/verify-email` - Подтверждение email ✅
+- `GET /api/v1/users/me` - Текущий пользователь ✅
+- `PUT /api/v1/users/me` - Обновление профиля ✅
+- `POST /api/v1/auth/refresh` - Обновление access token (в коде, но не протестировано)
+- `POST /api/v1/auth/logout` - Выход (не реализовано)
+- `POST /api/v1/auth/reset-password` - Сброс пароля (не реализовано)
+- `DELETE /api/v1/users/me` - Удаление аккаунта (не реализовано)
+- `GET /api/v1/users` - Все пользователи (не реализовано, admin)
+- `PATCH /api/v1/users/{id}/role` - Изменение роли (не реализовано, admin)
+
+### Places Service (Порт 8001 конт, 8002 хост)
+- `GET /api/v1/places` - Список мест с фильтрами (частично)
+- `GET /api/v1/places/:id` - Детали места (частично)
+- `POST /api/v1/places` - Создание места (частично)
+- `PUT /api/v1/places/:id` - Обновление места (частично)
+- `DELETE /api/v1/places/:id` - Удаление места (частично)
+- `GET /api/v1/places/nearby` - Близлежащие места (не реализовано)
+- `GET /api/v1/places/:id/reviews` - Отзывы места (не реализовано)
+
+### Reports Service (Порт 8002 конт, 8003 хост)
+- `GET /api/v1/reports` - Список отчетов (частично)
+- `GET /api/v1/reports/:id` - Детали отчета (частично)
+- `POST /api/v1/reports` - Создание отчета (частично)
+- `PUT /api/v1/reports/:id` - Обновление отчета (частично)
+- `DELETE /api/v1/reports/:id` - Удаление отчета (частично)
+- `POST /api/v1/reports/:id/like` - Лайк (не реализовано)
+- `DELETE /api/v1/reports/:id/like` - Убрать лайк (не реализовано)
+- `GET /api/v1/reports/:id/comments` - Комментарии (не реализовано)
+- `POST /api/v1/reports/:id/comments` - Добавить комментарий (не реализовано)
+
+### Booking Service (Порт 8003 конт, 8004 хост)
+- `GET /api/v1/bookings` - Список бронирований (частично)
+- `GET /api/v1/bookings/:id` - Детали бронирования (частично)
+- `POST /api/v1/bookings` - Создание бронирования (частично)
+- `PATCH /api/v1/bookings/:id/cancel` - Отмена (частично)
+- `GET /api/v1/booking-slots` - Доступные слоты (частично)
+- `POST /api/v1/booking-slots` - Создание слота (частично)
+- `DELETE /api/v1/booking-slots/:id` - Удаление слота (частично)
+
+### Shop Service (Порт 8004 конт, 8005 хост)
+- `GET /api/v1/shop/products` - Список товаров (частично)
+- `GET /api/v1/shop/products/:id` - Детали товара (частично)
+- `GET /api/v1/shop/categories` - Категории (частично)
+- `POST /api/v1/shop/products` - Создание товара (не реализовано, admin)
+- `PUT /api/v1/shop/products/:id` - Обновление товара (не реализовано, admin)
+- `DELETE /api/v1/shop/products/:id` - Удаление товара (не реализовано, admin)
+- `GET /api/v1/orders` - Заказы пользователя (частично)
+- `GET /api/v1/orders/:id` - Детали заказа (частично)
+- `POST /api/v1/orders` - Создание заказа (частично)
+
+### Email Service (Порт 8005 конт, 8006 хост)
+- `POST /api/v1/email/send` - Отправка email ✅
+- `POST /api/v1/email/generate-code` - Генерация кода подтверждения ✅
+- `GET /api/v1/shop/products` - Список товаров (частично)
+- `GET /api/v1/shop/products/:id` - Детали товара (частично)
+- `GET /api/v1/shop/categories` - Категории (частично)
+- `POST /api/v1/shop/products` - Создание товара (не реализовано, admin)
+- `PUT /api/v1/shop/products/:id` - Обновление товара (не реализовано, admin)
+- `DELETE /api/v1/shop/products/:id` - Удаление товара (не реализовано, admin)
+- `GET /api/v1/orders` - Заказы пользователя (частично)
+- `GET /api/v1/orders/:id` - Детали заказа (частично)
+- `POST /api/v1/orders` - Создание заказа (частично)
+
+### Email Service (Порт 8005 конт, 8006 хост)
+- `POST /api/v1/email/send` - Отправка email ✅
+- `POST /api/v1/email/generate-code` - Генерация кода подтверждения ✅
+
+## Критические чек-листы
+
+### Чек-лист перед коммитом:
+- [ ] Все тесты проходят
+- [ ] Docker-compose успешно собирается
+- [ ] Health checks работают
+- [ ] Нет конфликтов портов
+- [ ] Обновлена документация
+- [ ] Логи не содержат ошибок
+- [ ] Next.js rewrites настроены корректно для локальной разработки
+- [ ] NEXT_PUBLIC_API_URL установлен правильно (http://localhost:3000 для dev)
+
+### Чек-лист для новых сервисов:
+- [ ] Dockerfile использует уникальный контейнерный порт
+- [ ] docker-compose.dev.yml мапит правильные порты (хост:контейнер)
+- [ ] docker-compose.yml включает Traefik labels
+- [ ] Health check endpoint реализован
+- [ ] Порты не конфликтуют с другими сервисами
+
+### Обязательные требования к Health Check эндпоинтам
+Каждый микросервис обязан иметь эндпоинт `/health` с JSON ответом:
+
+```python
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "service-name",
+        "version": "1.0.0"
+    }
+```
+
+**Требования:**
+- Endpoint должен быть доступен без аутентификации
+- Возвращать JSON с полями: `status`, `service`, `version`
+- Может включать дополнительные поля состояния (например, `email_enabled`, `database_connected`)
+- Использоваться Traefik для проверки жизнеспособности сервиса в docker-compose.yml
+- **ОБЯЗАТЕЛЬНО:** Каждый новый микросервис должен содержать health check endpoint при создании
+
+### CI/CD и тестирование
+Каждый сервис должен иметь:
+- GitHub Actions workflow в `.github/workflows/{service}-test.yml`
+- Тестовый docker-compose конфиг в `docker-compose.test.yml`
+- Dockerfile должен копировать директорию `tests` для запуска тестов в контейнере
+- `requirements.txt` должен включать `pytest-cov` для покрытия тестами
+- Health checks для зависимых сервисов (postgres, redis) в docker-compose
+
+**Пример CI/CD workflow:**
+```yaml
+name: Service Test
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+      redis:
+        image: redis:7-alpine
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run tests
+        run: |
+          docker-compose -f docker-compose.test.yml up --abort-on-container-exit
+```
+
+### Мониторинг и логирование (ELK Stack)
+
+**ELK Stack для локальной разработки:**
+- Запуск: `bash scripts/setup-elk.sh`
+- Elasticsearch: http://localhost:9200
+- Kibana: http://localhost:5601
+- Logstash: http://localhost:9600 (HTTP input на порту 5000)
+
+**Обязательные требования к логированию для сервисов:**
+- `requirements.txt` должен включать `structlog>=24.1.0`
+- Модуль `app/core/logging_config.py` с настройкой structlog
+- JSON формат логов для отправки в Logstash
+- Контекстные поля: `service`, `level`, `timestamp`, `error`
+- Middleware для логирования HTTP запросов
+
+**Пример конфигурации:**
+```python
+# app/core/config.py
+LOG_LEVEL: str = "INFO"
+LOGSTASH_URL: str = "http://logstash:5000"
+SERVICE_NAME: str = "service-name"
+```
+
+**Каждый сервис должен:**
+1. Использовать `structlog` для структурированного логирования
+2. Иметь `LoggingMiddleware` для трассировки HTTP запросов
+3. Логировать все ошибки с `exc_info=True`
+4. Отправлять логи в Logstash по HTTP на порт 5000
+
+## Известные проблемы и TODO
+
+### Высокий приоритет:
+1. **Несоответствие портов:** Dockerfile CMD ≠ docker-compose.dev.yml CONTAINER для Places, Reports, Booking, Shop
+2. **Role в JWT:** Роль не включена в JWT токен при создании
+3. **Role в БД:** Поле role отсутствует в database/schema.sql
+4. **Email Service:** Отсутствует в docker-compose.yml (production)
+
+### Средний приоритет:
+5. **SMTP настройки:** Отсутствуют в .env.example
+6. **RBAC:** Полная реализация с проверками ролей
+7. **Admin endpoints:** Не реализованы
+
+### Низкий приоритет:
+8. **Хеширование паролей:** Возможный переход с pbkdf2_sha256 на bcrypt
+9. **Refresh token:** HTTP-only cookie функционал (частично в коде)
+10. **Rate limiting:** Пер-пользователь и пер-IP
+
+## Документация
+**Обязательно обновлять:**
+1. `README.md` сервиса (при изменении функциональности)
+2. `database/schema.sql` (при изменении моделей БД)
+3. Swagger/OpenAPI документация
+4. `.env.example` (новые переменные окружения)
+5. `системный промпт` (при изменениях архитектуры)
+
+## Безопасность
+- HTTPS в production
+- Валидация входных данных (Pydantic)
+- Защита от SQL injection (SQLAlchemy)
+- XSS защита (React escaping)
+- pbkdf2_sha256 для паролей (текущее решение)
+
+## Будущие улучшения
+1. Event-Driven Architecture (RabbitMQ/Kafka)
+2. Отдельные БД для каждого сервиса
+3. GraphQL Gateway
+4. Мониторинг (Prometheus, Grafana)
+5. WebSocket для уведомлений в реальном времени
+6. Rate limiting пер-пользователь и пер-IP
+7. Полная RBAC реализация с admin endpoints
+8. HTTP-only cookies для refresh tokens
+
+---
+**Главный принцип:** Каждое изменение должно повышать ценность платформы, не снижая надежность и поддерживаемость существующей системы.

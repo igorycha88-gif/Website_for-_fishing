@@ -37,80 +37,17 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
       EMAIL_SERVICE_URL: http://email-service:8005
+      ENABLE_EMAIL_SENDING: ${ENABLE_EMAIL_SENDING:-false}
+      EMAIL_CODE_EXPIRE_MINUTES: ${EMAIL_CODE_EXPIRE_MINUTES:-15}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
+      SERVICE_NAME: ${SERVICE_NAME:-auth-service}
     networks:
       - fishing-network
     depends_on:
       - postgres
       - redis
       - email-service
-
-  places-service:
-    build:
-      context: ./services/places-service
-      dockerfile: Dockerfile
-    ports:
-      - "8002:8000"
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      MAPBOX_API_KEY: ${MAPBOX_API_KEY}
-    networks:
-      - fishing-network
-    depends_on:
-      - postgres
-      - redis
-
-  reports-service:
-    build:
-      context: ./services/reports-service
-      dockerfile: Dockerfile
-    ports:
-      - "8003:8000"
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
-    networks:
-      - fishing-network
-    depends_on:
-      - postgres
-      - redis
-
-  booking-service:
-    build:
-      context: ./services/booking-service
-      dockerfile: Dockerfile
-    ports:
-      - "8004:8000"
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
-    networks:
-      - fishing-network
-    depends_on:
-      - postgres
-      - redis
-
-  shop-service:
-    build:
-      context: ./services/shop-service
-      dockerfile: Dockerfile
-    ports:
-      - "8005:8000"
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
-    networks:
-      - fishing-network
-    depends_on:
-      - postgres
-      - redis
 
   email-service:
     build:
@@ -125,8 +62,96 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-FishMap}
+      ENABLE_EMAIL_SENDING: ${ENABLE_EMAIL_SENDING:-false}
+      EMAIL_CODE_EXPIRE_MINUTES: ${EMAIL_CODE_EXPIRE_MINUTES:-15}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
+      SERVICE_NAME: ${SERVICE_NAME:-email-service}
     networks:
       - fishing-network
+    depends_on:
+      - postgres
+      - redis
+
+  places-service:
+    build:
+      context: ./services/places-service
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8001"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MAPBOX_API_KEY: ${MAPBOX_API_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
+      SERVICE_NAME: ${SERVICE_NAME:-places-service}
+    networks:
+      - fishing-network
+    depends_on:
+      - postgres
+      - redis
+
+  reports-service:
+    build:
+      context: ./services/reports-service
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8002"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
+      SERVICE_NAME: ${SERVICE_NAME:-reports-service}
+    networks:
+      - fishing-network
+    depends_on:
+      - postgres
+      - redis
+
+  booking-service:
+    build:
+      context: ./services/booking-service
+      dockerfile: Dockerfile
+    ports:
+      - "8004:8003"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
+      SERVICE_NAME: ${SERVICE_NAME:-booking-service}
+    networks:
+      - fishing-network
+    depends_on:
+      - postgres
+      - redis
+
+  shop-service:
+    build:
+      context: ./services/shop-service
+      dockerfile: Dockerfile
+    ports:
+      - "8005:8004"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
+      SERVICE_NAME: ${SERVICE_NAME:-shop-service}
+    networks:
+      - fishing-network
+    depends_on:
+      - postgres
+      - redis
 
   frontend:
     build:
@@ -135,7 +160,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost
+      NEXT_PUBLIC_API_URL: http://localhost:3000
       NEXT_PUBLIC_MAPBOX_API_KEY: ${MAPBOX_API_KEY}
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
     networks:
