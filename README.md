@@ -5,7 +5,7 @@ Microservices-based platform for fishing enthusiasts with places catalog, report
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
+ ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           Docker Swarm Cluster                               │
 │                                                                             │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
@@ -16,14 +16,19 @@ Microservices-based platform for fishing enthusiasts with places catalog, report
 │  │  Frontend    │  │ Auth Service │  │Places Service│  │Reports       │  │
 │  │  (Next.js)   │  │  (FastAPI)   │  │  (FastAPI)   │  │Service       │  │
 │  │  Port: 3000  │  │  Port: 8000  │  │  Port: 8001  │  │(FastAPI)     │  │
-│  └──────────────┘  └──────────────┘  └──────────────┘  │  Port: 8002  │  │
-│                                                        └──────────────┘  │
+│  │ Next.js      │  │              │  │              │  │  Port: 8002  │  │
+│  │ Rewrites     │  │              │  │              │  └──────────────┘  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │                 │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │Booking       │  │Shop Service  │  │PostgreSQL    │  │Redis         │  │
-│  │Service       │  │  (FastAPI)   │  │   (DB)       │  │  (Cache)     │  │
-│  │(FastAPI)     │  │  Port: 8004  │  │  Port: 5432  │  │  Port: 6379  │  │
-│  │  Port: 8003  │  └──────────────┘  └──────────────┘  └──────────────┘  │
-│  └──────────────┘                                                              │
+│  │Booking       │  │Shop Service  │  │ Email        │  │PostgreSQL    │  │
+│  │Service       │  │  (FastAPI)   │  │Service       │  │   (DB)       │  │
+│  │(FastAPI)     │  │  Port: 8004  │  │  (FastAPI)   │  │  Port: 5432  │  │
+│  │  Port: 8003  │  └──────────────┘  │  Port: 8005  │  └──────────────┘  │
+│  └──────────────┘                   └──────────────┘  ┌──────────────┐  │
+│                                                       │Redis         │  │
+│                                                       │  (Cache)     │  │
+│                                                       │  Port: 6379  │  │
+│                                                       └──────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -82,6 +87,12 @@ Microservices-based platform for fishing enthusiasts with places catalog, report
 - Email verification
 - Password reset
 - Profile management
+
+### Email Service
+- Email notifications
+- Verification code generation
+- SMTP integration with fallback support
+- Email sending toggle (development mode)
 
 ### Places Service
 - Browse fishing places
@@ -144,9 +155,22 @@ docker stack deploy -c docker-compose.yml fishing
 ```
 
 ### Accessing Services
-- Frontend: http://localhost
-- Traefik Dashboard: http://localhost:8080
-- API: http://localhost/api/v1/
+
+#### Local Development (docker-compose.dev.yml)
+- **Frontend**: http://localhost:3000
+- **Auth Service**: http://localhost:8001
+- **Places Service**: http://localhost:8002
+- **Reports Service**: http://localhost:8003
+- **Booking Service**: http://localhost:8004
+- **Shop Service**: http://localhost:8005
+- **Email Service**: http://localhost:8006
+
+#### Production (Docker Swarm)
+- **Frontend**: http://localhost
+- **Traefik Dashboard**: http://localhost:8080
+- **API**: http://localhost/api/v1/ (through Traefik)
+
+**Note**: In local development, Next.js uses rewrites to proxy API requests to the appropriate microservices via their host ports. In production, Traefik handles routing.
 
 ## API Endpoints
 
@@ -156,6 +180,10 @@ docker stack deploy -c docker-compose.yml fishing
 - `POST /api/v1/auth/refresh` - Refresh access token
 - `GET /api/v1/users/me` - Get current user
 - `PUT /api/v1/users/me` - Update profile
+
+### Email Service
+- `POST /api/v1/email/send` - Send email
+- `POST /api/v1/email/generate-code` - Generate verification code
 
 ### Places Service
 - `GET /api/v1/places` - List places
