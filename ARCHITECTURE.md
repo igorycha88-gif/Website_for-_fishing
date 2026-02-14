@@ -7,188 +7,184 @@ The Fishing Platform is a microservices-based application built with:
 - **Backend**: FastAPI (Python) microservices
 - **Database**: PostgreSQL (single shared database)
 - **Cache**: Redis
-- **Infrastructure**: Docker Swarm with Traefik
+- **Infrastructure**: Docker with docker-compose (development), Docker Swarm (production planned)
 
-## Microservices
+**Current Status**: Early development phase. Only Auth Service and Email Service are fully implemented. Other services are placeholders.
 
-### 1. Auth Service (Port 8000)
+## Microservices Architecture
+
+### Port Configuration
+
+| Service | Container Port | Host Port (Dev) | Status |
+|---------|---------------|-----------------|--------|
+| Auth | 8000 | 8001 | ✅ Implemented |
+| Places | 8001 | 8002 | 🚧 Placeholder |
+| Reports | 8002 | 8003 | 🚧 Placeholder |
+| Booking | 8003 | 8004 | 🚧 Placeholder |
+| Shop | 8004 | 8005 | 🚧 Placeholder |
+| Email | 8005 | 8006 | ✅ Implemented |
+| Frontend | 3000 | 3000 | ✅ Implemented |
+
+## Service Details
+
+### 1. Auth Service (Host: 8001, Container: 8000) ✅
+**Status**: Fully Implemented
+
 **Responsibilities:**
 - User registration & authentication
 - JWT token generation & validation
 - User profile management
 - Password reset
 - Email verification
+- Role-based access control (user/moderator/admin)
 
-**API Routes:**
+**Implemented API Routes:**
 - `POST /api/v1/auth/register` - Register new user
+- `POST /api/v1/auth/verify-email` - Verify email with code
 - `POST /api/v1/auth/login` - User login
-- `POST /api/v1/auth/refresh` - Refresh access token
-- `POST /api/v1/auth/logout` - Logout user
-- `POST /api/v1/auth/verify-email` - Verify email
-- `POST /api/v1/auth/reset-password` - Reset password
-- `GET /api/v1/users/me` - Get current user
+- `POST /api/v1/auth/reset-password/request` - Request password reset
+- `POST /api/v1/auth/reset-password/confirm` - Confirm password reset
+- `GET /api/v1/users/me` - Get current user profile
 - `PUT /api/v1/users/me` - Update user profile
 - `PATCH /api/v1/users/me/password` - Change password
-- `DELETE /api/v1/users/me` - Delete account
 
 **Database Tables:**
-- `users`
-- `refresh_tokens`
+- `users` - User accounts with role field (user/moderator/admin)
+- `refresh_tokens` - Refresh tokens for JWT
+- `email_verification_codes` - Email verification codes
 
-### 2. Places Service (Port 8001)
-**Responsibilities:**
+**Health Check:**
+- `GET /health` - Service health status
+
+**Features:**
+- Email verification via Email Service
+- Password reset with token
+- Bcrypt password hashing
+- JWT access tokens
+- Structured logging with Logstash integration
+
+### 2. Places Service (Host: 8002, Container: 8001) 🚧
+**Status**: Placeholder (Not Implemented)
+
+**Planned Responsibilities:**
 - Manage fishing places
 - Search & filtering
 - Geospatial queries
 - Place ratings
 
-**API Routes:**
+**Health Check:**
+- `GET /health` - Service health status
+
+**Planned API Routes:**
 - `GET /api/v1/places` - List places with filters
 - `GET /api/v1/places/:id` - Get place details
 - `POST /api/v1/places` - Create new place
 - `PUT /api/v1/places/:id` - Update place
 - `DELETE /api/v1/places/:id` - Delete place
-- `GET /api/v1/places/nearby` - Find nearby places
-- `GET /api/v1/places/:id/reviews` - Get place reviews
 
-**Database Tables:**
-- `places`
-- `ratings` (read-only for ratings)
+### 3. Reports Service (Host: 8003, Container: 8002) 🚧
+**Status**: Placeholder (Not Implemented)
 
-### 3. Reports Service (Port 8002)
-**Responsibilities:**
+**Planned Responsibilities:**
 - User reports & posts
 - Image upload (Cloudinary)
 - Comments & likes
 - Fish species tracking
 
-**API Routes:**
+**Health Check:**
+- `GET /health` - Service health status
+
+**Planned API Routes:**
 - `GET /api/v1/reports` - List reports
 - `GET /api/v1/reports/:id` - Get report details
 - `POST /api/v1/reports` - Create report
-- `PUT /api/v1/reports/:id` - Update report
-- `DELETE /api/v1/reports/:id` - Delete report
-- `POST /api/v1/reports/:id/like` - Like report
-- `DELETE /api/v1/reports/:id/like` - Unlike report
-- `GET /api/v1/reports/:id/comments` - Get comments
-- `POST /api/v1/reports/:id/comments` - Add comment
 
-**Database Tables:**
-- `reports`
-- `ratings`
+### 4. Booking Service (Host: 8004, Container: 8003) 🚧
+**Status**: Placeholder (Not Implemented)
 
-### 4. Booking Service (Port 8003)
-**Responsibilities:**
+**Planned Responsibilities:**
 - Booking management
 - Availability slots
 - Payment processing (Stripe)
 - Booking cancellation
 
-**API Routes:**
+**Health Check:**
+- `GET /health` - Service health status
+
+**Planned API Routes:**
 - `GET /api/v1/bookings` - List user bookings
-- `GET /api/v1/bookings/:id` - Get booking details
 - `POST /api/v1/bookings` - Create booking
-- `PATCH /api/v1/bookings/:id/cancel` - Cancel booking
 - `GET /api/v1/booking-slots` - Get available slots
-- `POST /api/v1/booking-slots` - Create slot (for place owners)
-- `DELETE /api/v1/booking-slots/:id` - Delete slot
-- `POST /api/v1/bookings/:id/webhook` - Stripe webhook
 
-**Database Tables:**
-- `bookings`
-- `booking_slots`
+### 5. Shop Service (Host: 8005, Container: 8004) 🚧
+**Status**: Placeholder (Not Implemented)
 
-### 5. Shop Service (Port 8004)
-**Responsibilities:**
+**Planned Responsibilities:**
 - Product catalog
 - Categories
 - Shopping cart
 - Order management
 - Payment processing (Stripe)
 
-**API Routes:**
+**Health Check:**
+- `GET /health` - Service health status
+
+**Planned API Routes:**
 - `GET /api/v1/shop/products` - List products
-- `GET /api/v1/shop/products/:id` - Get product details
-- `GET /api/v1/shop/categories` - List categories
-- `GET /api/v1/orders` - List user orders
-- `GET /api/v1/orders/:id` - Get order details
 - `POST /api/v1/orders` - Create order
-- `PATCH /api/v1/orders/:id/cancel` - Cancel order
-- `POST /api/v1/orders/webhook` - Stripe webhook
 
-**Database Tables:**
-- `products`
-- `categories`
-- `orders`
-- `order_items`
+### 6. Email Service (Host: 8006, Container: 8005) ✅
+**Status**: Fully Implemented
 
-## Communication Patterns
+**Responsibilities:**
+- Email notifications
+- Verification code generation
+- SMTP integration with fallback
 
-### REST API
-All microservices communicate via REST API over HTTP:
-- Frontend → Services (via Traefik)
-- Service → Service (via Traefik)
-- External Webhooks → Services (via Traefik)
+**Implemented API Routes:**
+- `POST /api/v1/email/send` - Send verification email
+- `POST /api/v1/email/generate-code` - Generate verification code
 
-### Authentication Flow
+**Health Check:**
+- `GET /health` - Service health status
+- `GET /` - Service root endpoint
 
+**Features:**
+- SMTP integration (Yandex)
+- Email sending toggle (development mode)
+- Structured logging with Logstash integration
+- Async email sending
+
+## Frontend Structure
+
+### Next.js 15 App Router (Port 3000) ✅
+
+**Implemented Pages:**
+- `/` - Home page
+- `/login` - User login
+- `/register` - User registration
+- `/verify-email` - Email verification
+- `/reset-password` - Password reset
+- `/profile` - User profile (with tabs: Profile, Settings)
+- `/map` - Interactive map
+- `/resorts` - Fishing places/resorts listing
+- `/shop` - Online shop
+- `/stores` - Stores page
+- `/forecast` - Weather forecast
+
+**State Management:**
+- Zustand stores (useAuthStore for authentication)
+
+**API Proxying:**
+Next.js rewrites configured in `next.config.js`:
 ```
-1. User registers
-   Frontend → Auth Service (/auth/register)
-   → Creates user in DB
-   → Returns success
-
-2. User logs in
-   Frontend → Auth Service (/auth/login)
-   → Validates credentials
-   → Returns access_token (JWT) + refresh_token
-
-3. Frontend stores tokens
-   - Access token in memory (30 min)
-   - Refresh token in HTTP-only cookie (7 days)
-
-4. Frontend makes authenticated request
-   Frontend → Any Service
-   Headers: Authorization: Bearer <access_token>
-   → Service validates JWT
-   → Returns data
-
-5. Access token expires
-   Frontend → Auth Service (/auth/refresh)
-   Cookie: refresh_token
-   → Returns new access_token
-```
-
-### Data Flow Example (Booking)
-
-```
-1. User views place
-   Frontend → Places Service (/places/:id)
-   → Returns place details
-
-2. User checks availability
-   Frontend → Booking Service (/booking-slots?place_id=X)
-   → Returns available slots
-
-3. User creates booking
-   Frontend → Booking Service (/bookings)
-   Headers: Authorization: Bearer <token>
-   Body: { place_id, slot_id, people_count }
-   → Creates pending booking
-   → Returns Stripe client_secret
-
-4. User pays
-   Frontend → Stripe SDK
-   → User completes payment
-
-5. Stripe webhook
-   Stripe → Booking Service (/bookings/webhook)
-   → Updates booking to confirmed
-   → Emails user
-
-6. User views bookings
-   Frontend → Booking Service (/bookings)
-   → Returns user's bookings
+/api/v1/auth/* -> http://host.docker.internal:8001/api/v1/auth/*
+/api/v1/users/* -> http://host.docker.internal:8001/api/v1/users/*
+/api/v1/places/* -> http://host.docker.internal:8002/api/v1/places/*
+/api/v1/reports/* -> http://host.docker.internal:8003/api/v1/reports/*
+/api/v1/booking/* -> http://host.docker.internal:8004/api/v1/booking/*
+/api/v1/shop/* -> http://host.docker.internal:8005/api/v1/shop/*
+/api/v1/email/* -> http://host.docker.internal:8006/api/v1/email/*
 ```
 
 ## Database Design
@@ -198,103 +194,167 @@ Single PostgreSQL database shared by all microservices:
 - **Pros**: Simple transactions, data consistency, easier to develop
 - **Cons**: Tight coupling, single point of failure
 
-### Table Ownership
+### Cross-Service Data References
 
-| Table | Owner Service | Shared By |
-|-------|---------------|-----------|
-| users | Auth | All |
-| refresh_tokens | Auth | None |
-| places | Places | All (read) |
-| reports | Reports | All (read) |
-| bookings | Booking | All (read) |
-| booking_slots | Booking | None |
-| products | Shop | All (read) |
-| categories | Shop | All (read) |
-| orders | Shop | All (read) |
-| order_items | Shop | All (read) |
-| ratings | Reports | Places (read) |
+**Strategy**: FK constraints at database level only, not at ORM level
 
-### Database Connection
-All services connect to the same PostgreSQL instance:
+**Rationale**:
+- Microservices independence: Each service can operate without importing models from other services
+- Referential integrity: PostgreSQL FK constraints ensure data consistency
+- Validation: User existence validated via JWT token, not DB lookup
+
+**Affected tables**:
+- `places.owner_id` → references `users.id` (DB-level FK only)
+- `favorite_places.user_id` → references `users.id` (DB-level FK only)
+
+### Implemented Tables
+- `users` - User accounts (email, username, password_hash, role, etc.)
+- `refresh_tokens` - JWT refresh tokens
+- `email_verification_codes` - Email verification codes
+
+### Planned Tables (in schema.sql, not yet used)
+- `places` - Fishing places
+- `reports` - Fishing reports
+- `bookings` - Booking records
+- `booking_slots` - Available booking slots
+- `products` - Shop products
+- `categories` - Product categories
+- `orders` - Shop orders
+- `order_items` - Order line items
+- `ratings` - Ratings for places and reports
+
+### User Model Fields
+```python
+id: UUID (primary key)
+email: VARCHAR(255) UNIQUE
+username: VARCHAR(100) UNIQUE
+password_hash: VARCHAR(255)
+first_name: VARCHAR(100)
+last_name: VARCHAR(100)
+phone: VARCHAR(20)
+avatar_url: VARCHAR(500)
+is_active: BOOLEAN (default true)
+is_verified: BOOLEAN (default false)
+role: VARCHAR(20) (default 'user')  # user, moderator, admin
+created_at: TIMESTAMP
+updated_at: TIMESTAMP
 ```
-DATABASE_URL=postgresql+asyncpg://user:password@postgres:5432/fishing_db
+
+## Authentication Flow
+
+### Registration Flow
+```
+1. User submits registration form
+   Frontend → Auth Service (/api/v1/auth/register)
+   → Creates user in DB
+   → Generates verification code
+   → Sends verification email via Email Service
+
+2. User receives email with verification code
+
+3. User verifies email
+   Frontend → Auth Service (/api/v1/auth/verify-email)
+   → Validates code
+   → Updates user.is_verified = true
+   → Returns JWT access token
+
+4. Frontend stores access token in memory
 ```
 
-## Caching Strategy
+### Login Flow
+```
+1. User submits login credentials
+   Frontend → Auth Service (/api/v1/auth/login)
+   → Validates email and password
+   → Checks is_verified status
+   → Returns JWT access token
 
-### Redis Use Cases
+2. Frontend stores access token in memory
 
-1. **Session Store** - Refresh tokens
-   ```
-   Key: refresh:{token}
-   Value: {user_id, expires_at}
-   TTL: 7 days
-   ```
+3. Frontend includes Authorization header for authenticated requests
+   Authorization: Bearer <access_token>
+```
 
-2. **API Response Caching**
-   ```
-   Key: api:{endpoint}:{params_hash}
-   Value: {response_data}
-   TTL: 5-60 minutes
-   ```
+### Password Reset Flow
+```
+1. User requests password reset
+   Frontend → Auth Service (/api/v1/auth/reset-password/request)
+   → Generates reset token (JWT, 1 hour expiry)
+   → Returns success message
 
-3. **Rate Limiting**
-   ```
-   Key: ratelimit:{user_id}:{endpoint}
-   Value: request_count
-   TTL: 1 minute
-   ```
+2. User receives reset link with token
 
-4. **Place Search Cache**
-   ```
-   Key: search:places:{lat},{lng},{radius}
-   Value: [place_ids]
-   TTL: 1 hour
-   ```
+3. User submits new password
+   Frontend → Auth Service (/api/v1/auth/reset-password/confirm)
+   → Validates token
+   → Updates password
+```
+
+## Caching Strategy (Redis)
+
+### Current Usage
+- Planned for:
+  - Session store for refresh tokens
+  - API response caching
+  - Rate limiting
+
+### Planned Use Cases
+```python
+# Session Store
+Key: refresh:{token}
+Value: {user_id, expires_at}
+TTL: 7 days
+
+# API Response Caching
+Key: api:{endpoint}:{params_hash}
+Value: {response_data}
+TTL: 5-60 minutes
+
+# Rate Limiting
+Key: ratelimit:{user_id}:{endpoint}
+Value: request_count
+TTL: 1 minute
+```
 
 ## Security
 
 ### Authentication
-- JWT access tokens (30 min expiry)
-- Refresh tokens (7 days expiry)
-- HTTP-only cookies for refresh tokens
-- Password hashing with bcrypt
+- JWT access tokens (no expiry configured currently, typically 30 min)
+- Bcrypt password hashing
+- Email verification required
+- Password reset with temporary tokens
 
 ### Authorization
-- Role-based access control (RBAC)
-- Resource ownership checks
-- Admin endpoints
+- Role-based access control (RBAC): user, moderator, admin
+- Role field in User model and JWT tokens
 
 ### Data Protection
-- HTTPS in production
+- HTTPS in production (planned)
 - Input validation (Pydantic)
 - SQL injection prevention (SQLAlchemy)
-- XSS protection (React)
+- XSS protection (React escaping)
 
 ## Error Handling
 
 ### Standard Error Response
-
 ```json
 {
   "error": {
-    "code": "RESOURCE_NOT_FOUND",
-    "message": "Place with id 'abc' not found",
+    "code": "ERROR_CODE",
+    "message": "Error message",
     "details": {}
   }
 }
 ```
 
-### Error Codes
-
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| VALIDATION_ERROR | 400 | Invalid input data |
-| UNAUTHORIZED | 401 | Missing or invalid token |
-| FORBIDDEN | 403 | Insufficient permissions |
-| RESOURCE_NOT_FOUND | 404 | Resource doesn't exist |
-| CONFLICT | 409 | Resource already exists |
-| INTERNAL_ERROR | 500 | Server error |
+### Implemented Error Codes
+- `EMAIL_ALREADY_EXISTS` - Email already registered
+- `USERNAME_ALREADY_EXISTS` - Username already taken
+- `INVALID_OR_EXPIRED_CODE` - Invalid or expired verification code
+- `INVALID_CREDENTIALS` - Invalid email or password
+- `EMAIL_NOT_VERIFIED` - Email not verified
+- `USER_NOT_FOUND` - User not found
+- `EMAIL_SEND_FAILED` - Failed to send email
 
 ## Monitoring & Logging
 
@@ -310,34 +370,20 @@ DATABASE_URL=postgresql+asyncpg://user:password@postgres:5432/fishing_db
 }
 ```
 
+### ELK Stack Integration
+- **Elasticsearch**: Log storage
+- **Logstash**: Log processing (port 5000)
+- **Kibana**: Log visualization (planned)
+
 ### Health Checks
-Each service exposes `/health` endpoint:
+All services expose `/health` endpoint:
 ```json
 {
   "status": "healthy",
-  "database": "connected",
-  "redis": "connected",
+  "service": "auth-service",
   "version": "1.0.0"
 }
 ```
-
-## Scalability
-
-### Horizontal Scaling
-Each service can be scaled independently:
-```bash
-# Scale auth-service to 4 instances
-docker service scale fishing_auth-service=4
-```
-
-### Load Balancing
-Traefik distributes requests across service instances.
-
-### Database Scaling
-For production:
-- Read replicas for reads
-- Connection pooling
-- Database sharding (if needed)
 
 ## Deployment Architecture
 
@@ -345,18 +391,16 @@ For production:
 ```
 Local machine
 ├── docker-compose.dev.yml
-├── Traefik (port 80, 8080)
 ├── PostgreSQL (port 5432)
 ├── Redis (port 6379)
-└── Services (ports 8000-8004, 3000)
+├── Services (ports 8001-8006)
+└── Frontend (port 3000)
 ```
 
-### Production
+### Production (Planned)
 ```
 Docker Swarm Cluster
-├── Manager nodes (3)
-├── Worker nodes (5+)
-├── Traefik (3 replicas)
+├── Traefik (reverse proxy)
 ├── PostgreSQL (with backup)
 ├── Redis (with persistence)
 └── Services (2+ replicas each)
@@ -364,11 +408,81 @@ Docker Swarm Cluster
 
 ## Future Improvements
 
-1. **Event-Driven Architecture** - Add message queue (RabbitMQ/Kafka)
-2. **Database per Service** - Migrate to separate databases
-3. **GraphQL** - Add GraphQL gateway
-4. **Micro Frontends** - Split frontend into micro frontends
-5. **CI/CD Pipeline** - Automated testing & deployment
-6. **Monitoring** - Prometheus, Grafana, ELK stack
-7. **Rate Limiting** - Per-user and per-IP limits
-8. **WebSocket** - Real-time notifications
+1. **Places Service** - Implement CRUD operations, map integration
+2. **Reports Service** - Implement report creation, image upload
+3. **Booking Service** - Implement booking system, Stripe integration
+4. **Shop Service** - Implement e-commerce functionality
+5. **Event-Driven Architecture** - Add message queue (RabbitMQ/Kafka)
+6. **Database per Service** - Migrate to separate databases
+7. **API Gateway** - GraphQL Gateway or centralized routing
+8. **Monitoring** - Prometheus, Grafana
+9. **WebSocket** - Real-time notifications
+10. **Rate Limiting** - Per-user and per-IP limits
+
+## Development Roadmap
+
+### Phase 1: Authentication (✅ Complete)
+- User registration with email verification
+- Login/logout
+- Password reset
+- User profile management
+
+### Phase 2: Places Service (🚧 In Progress)
+- CRUD operations for places
+- Map integration (Mapbox)
+- Search and filtering
+
+### Phase 3: Reports Service (Planned)
+- Report creation and management
+- Image upload (Cloudinary)
+- Comments and ratings
+
+### Phase 4: Booking Service (Planned)
+- Booking system
+- Availability management
+- Stripe payment integration
+
+### Phase 5: Shop Service (Planned)
+- Product catalog
+- Shopping cart
+- Order management
+- Stripe payment integration
+
+## Getting Started
+
+### Prerequisites
+- Docker & Docker Compose
+- Python 3.12+ (for local development)
+- Node.js 20+ (for local development)
+
+### Running the Application
+```bash
+# Development
+docker-compose -f docker-compose.dev.yml up -d
+
+# Access services
+Frontend: http://localhost:3000
+Auth Service: http://localhost:8001
+Places Service: http://localhost:8002
+Reports Service: http://localhost:8003
+Booking Service: http://localhost:8004
+Shop Service: http://localhost:8005
+Email Service: http://localhost:8006
+```
+
+### Testing Auth Service
+```bash
+# Register
+curl -X POST http://localhost:8001/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","username":"test","password":"password123"}'
+
+# Login
+curl -X POST http://localhost:8001/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}'
+
+# Get current user (requires token)
+curl -X GET http://localhost:8001/api/v1/users/me \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
