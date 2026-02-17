@@ -63,6 +63,8 @@ class FishTypeBrief(BaseModel):
 class TimeOfDayForecast(BaseModel):
     time_of_day: str
     bite_score: float
+    is_spawn_period: bool = False
+    spawn_message: Optional[str] = None
     temperature_score: Optional[float]
     pressure_score: Optional[float]
     wind_score: Optional[float]

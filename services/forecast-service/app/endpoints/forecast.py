@@ -176,6 +176,8 @@ async def get_forecast(
                     TimeOfDayForecast(
                         time_of_day=ef.time_of_day,
                         bite_score=ef.bite_score,
+                        is_spawn_period=ef.is_spawn_period or False,
+                        spawn_message=ef.spawn_message,
                         temperature_score=ef.temperature_score,
                         pressure_score=ef.pressure_score,
                         wind_score=ef.wind_score,
@@ -214,16 +216,22 @@ async def get_forecast(
                         prefer_overcast=fish_settings.prefer_overcast,
                         moon_sensitivity=fish_settings.moon_sensitivity,
                         active_in_winter=fish_settings.active_in_winter,
+                        spawn_start_month=fish_settings.spawn_start_month,
+                        spawn_end_month=fish_settings.spawn_end_month,
+                        spawn_start_day=fish_settings.spawn_start_day or 1,
+                        spawn_end_day=fish_settings.spawn_end_day or 31,
                     )
 
                     hour = list(hour_ranges[tod])[0]
                     calc_result = calculate_bite_score(
-                        avg_weather, fish_settings_obj, hour, month
+                        avg_weather, fish_settings_obj, hour, month, forecast_date
                     )
 
-                    rec = generate_recommendation(
-                        calc_result["bite_score"], avg_weather, fish_settings_obj
-                    )
+                    rec = None
+                    if not calc_result["is_spawn_period"]:
+                        rec = generate_recommendation(
+                            calc_result["bite_score"], avg_weather, fish_settings_obj
+                        )
 
                     fish_name_result = await db.execute(
                         select(FishBiteSettings.fish_type_id).where(
@@ -235,13 +243,17 @@ async def get_forecast(
                         TimeOfDayForecast(
                             time_of_day=tod,
                             bite_score=calc_result["bite_score"],
+                            is_spawn_period=calc_result["is_spawn_period"],
+                            spawn_message=calc_result["spawn_message"],
                             temperature_score=calc_result["temperature_score"],
                             pressure_score=calc_result["pressure_score"],
                             wind_score=calc_result["wind_score"],
                             moon_score=calc_result["moon_score"],
                             precipitation_score=calc_result["precipitation_score"],
                             recommendation=rec,
-                            best_baits=get_best_baits("", season),
+                            best_baits=get_best_baits("", season)
+                            if not calc_result["is_spawn_period"]
+                            else None,
                             best_depth=get_best_depth("", season),
                         )
                     )

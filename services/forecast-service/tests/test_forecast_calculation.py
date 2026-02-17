@@ -1,5 +1,5 @@
 import pytest
-from datetime import time
+from datetime import time, date
 from decimal import Decimal
 from uuid import uuid4
 
@@ -15,10 +15,12 @@ from app.services.forecast_calculation import (
     calculate_precipitation_score,
     calculate_time_score,
     get_season_multiplier,
+    is_in_spawn_period,
     calculate_bite_score,
     generate_recommendation,
     get_best_baits,
     get_best_depth,
+    WINTER_MONTHLY_MULTIPLIERS,
 )
 
 
@@ -37,6 +39,10 @@ def fish_settings():
         prefer_overcast=True,
         moon_sensitivity=Decimal("0.4"),
         active_in_winter=True,
+        spawn_start_month=3,
+        spawn_end_month=4,
+        spawn_start_day=1,
+        spawn_end_day=30,
     )
 
 
@@ -55,6 +61,10 @@ def winter_fish_settings():
         prefer_overcast=True,
         moon_sensitivity=Decimal("0.7"),
         active_in_winter=True,
+        spawn_start_month=12,
+        spawn_end_month=2,
+        spawn_start_day=15,
+        spawn_end_day=28,
     )
 
 
@@ -73,6 +83,30 @@ def summer_fish_settings():
         prefer_overcast=True,
         moon_sensitivity=Decimal("0.6"),
         active_in_winter=False,
+        spawn_start_month=5,
+        spawn_end_month=6,
+        spawn_start_day=15,
+        spawn_end_day=15,
+    )
+
+
+@pytest.fixture
+def fish_no_spawn():
+    return FishSettings(
+        fish_type_id=uuid4(),
+        fish_name="Лосось",
+        optimal_temp_min=Decimal("4"),
+        optimal_temp_max=Decimal("16"),
+        optimal_pressure_min=758,
+        optimal_pressure_max=770,
+        max_wind_speed=Decimal("5"),
+        prefer_morning=True,
+        prefer_evening=True,
+        prefer_overcast=True,
+        moon_sensitivity=Decimal("0.6"),
+        active_in_winter=False,
+        spawn_start_month=None,
+        spawn_end_month=None,
     )
 
 
@@ -431,16 +465,24 @@ class TestCalculateTimeScore:
         assert score == 60.0
 
 
-class TestGetSeasonMultiplier:
-    def test_winter_active_fish(self, fish_settings):
-        assert get_season_multiplier(fish_settings, 12) == 1.2
-        assert get_season_multiplier(fish_settings, 1) == 1.2
-        assert get_season_multiplier(fish_settings, 2) == 1.2
+class TestGetSeasonMultiplierV2:
+    def test_december_active_fish(self, fish_settings):
+        assert get_season_multiplier(fish_settings, 12) == 0.9
 
-    def test_winter_inactive_fish(self, summer_fish_settings):
-        assert get_season_multiplier(summer_fish_settings, 12) == 0.3
-        assert get_season_multiplier(summer_fish_settings, 1) == 0.3
-        assert get_season_multiplier(summer_fish_settings, 2) == 0.3
+    def test_december_inactive_fish(self, summer_fish_settings):
+        assert get_season_multiplier(summer_fish_settings, 12) == 0.2
+
+    def test_january_active_fish(self, fish_settings):
+        assert get_season_multiplier(fish_settings, 1) == 0.7
+
+    def test_january_inactive_fish(self, summer_fish_settings):
+        assert get_season_multiplier(summer_fish_settings, 1) == 0.1
+
+    def test_february_active_fish(self, fish_settings):
+        assert get_season_multiplier(fish_settings, 2) == 1.0
+
+    def test_february_inactive_fish(self, summer_fish_settings):
+        assert get_season_multiplier(summer_fish_settings, 2) == 0.15
 
     def test_spring(self, fish_settings):
         assert get_season_multiplier(fish_settings, 3) == 1.0
@@ -458,6 +500,81 @@ class TestGetSeasonMultiplier:
         assert get_season_multiplier(fish_settings, 11) == 1.0
 
 
+class TestIsInSpawnPeriod:
+    def test_in_spawn_period_start_month(self, fish_settings):
+        check_date = date(2025, 3, 15)
+        is_spawn, message = is_in_spawn_period(fish_settings, check_date)
+        assert is_spawn is True
+        assert "Нерестовый период" in message
+
+    def test_in_spawn_period_end_month(self, fish_settings):
+        check_date = date(2025, 4, 15)
+        is_spawn, message = is_in_spawn_period(fish_settings, check_date)
+        assert is_spawn is True
+        assert "Нерестовый период" in message
+
+    def test_not_in_spawn_period(self, fish_settings):
+        check_date = date(2025, 5, 15)
+        is_spawn, message = is_in_spawn_period(fish_settings, check_date)
+        assert is_spawn is False
+        assert message == ""
+
+    def test_spawn_crosses_year_boundary(self, winter_fish_settings):
+        check_date = date(2025, 1, 15)
+        is_spawn, message = is_in_spawn_period(winter_fish_settings, check_date)
+        assert is_spawn is True
+        assert "декабря" in message
+        assert "февраля" in message
+
+    def test_spawn_crosses_year_boundary_december(self, winter_fish_settings):
+        check_date = date(2025, 12, 20)
+        is_spawn, message = is_in_spawn_period(winter_fish_settings, check_date)
+        assert is_spawn is True
+
+    def test_spawn_crosses_year_boundary_february(self, winter_fish_settings):
+        check_date = date(2025, 2, 15)
+        is_spawn, message = is_in_spawn_period(winter_fish_settings, check_date)
+        assert is_spawn is True
+
+    def test_spawn_crosses_year_boundary_march(self, winter_fish_settings):
+        check_date = date(2025, 3, 15)
+        is_spawn, message = is_in_spawn_period(winter_fish_settings, check_date)
+        assert is_spawn is False
+
+    def test_no_spawn_period(self, fish_no_spawn):
+        check_date = date(2025, 3, 15)
+        is_spawn, message = is_in_spawn_period(fish_no_spawn, check_date)
+        assert is_spawn is False
+        assert message == ""
+
+    def test_spawn_specific_day_range(self, summer_fish_settings):
+        check_date_in = date(2025, 6, 15)
+        is_spawn, _ = is_in_spawn_period(summer_fish_settings, check_date_in)
+        assert is_spawn is True
+
+        check_date_before_in_range = date(2025, 6, 14)
+        is_spawn, _ = is_in_spawn_period(
+            summer_fish_settings, check_date_before_in_range
+        )
+        assert is_spawn is True
+
+        check_date_after = date(2025, 6, 16)
+        is_spawn, _ = is_in_spawn_period(summer_fish_settings, check_date_after)
+        assert is_spawn is False
+
+        check_date_before_start_month = date(2025, 5, 14)
+        is_spawn, _ = is_in_spawn_period(
+            summer_fish_settings, check_date_before_start_month
+        )
+        assert is_spawn is False
+
+        check_date_start_month_in = date(2025, 5, 20)
+        is_spawn, _ = is_in_spawn_period(
+            summer_fish_settings, check_date_start_month_in
+        )
+        assert is_spawn is True
+
+
 class TestCalculateBiteScore:
     def test_good_conditions(self, fish_settings):
         weather = WeatherConditions(
@@ -472,12 +589,15 @@ class TestCalculateBiteScore:
             sunrise=time(7, 0),
             sunset=time(18, 0),
         )
-        result = calculate_bite_score(weather, fish_settings, hour=8, month=5)
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=5, check_date=date(2025, 5, 15)
+        )
 
         assert "bite_score" in result
         assert 0 <= result["bite_score"] <= 100
         assert result["time_of_day"] == "morning"
         assert result["season_multiplier"] == 1.0
+        assert result["is_spawn_period"] is False
         assert result["bite_score"] >= 60
 
     def test_poor_conditions(self, fish_settings):
@@ -493,11 +613,14 @@ class TestCalculateBiteScore:
             sunrise=time(7, 0),
             sunset=time(18, 0),
         )
-        result = calculate_bite_score(weather, fish_settings, hour=14, month=1)
+        result = calculate_bite_score(
+            weather, fish_settings, hour=14, month=1, check_date=date(2025, 1, 15)
+        )
 
         assert "bite_score" in result
         assert 0 <= result["bite_score"] <= 100
         assert result["time_of_day"] == "day"
+        assert result["is_spawn_period"] is False
 
     def test_winter_inactive_fish(self, summer_fish_settings):
         weather = WeatherConditions(
@@ -512,10 +635,117 @@ class TestCalculateBiteScore:
             sunrise=time(8, 0),
             sunset=time(17, 0),
         )
-        result = calculate_bite_score(weather, summer_fish_settings, hour=8, month=1)
+        result = calculate_bite_score(
+            weather, summer_fish_settings, hour=8, month=1, check_date=date(2025, 1, 15)
+        )
 
-        assert result["season_multiplier"] == 0.3
+        assert result["season_multiplier"] == 0.1
         assert result["bite_score"] < 50
+        assert result["is_spawn_period"] is False
+
+    def test_spawn_period_returns_zero(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            pressure_trend=Decimal("2"),
+            wind_speed=Decimal("3"),
+            wind_direction=200,
+            cloudiness=60,
+            precipitation_mm=Decimal("0"),
+            moon_phase=Decimal("0.0"),
+            sunrise=time(7, 0),
+            sunset=time(18, 0),
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=3, check_date=date(2025, 3, 15)
+        )
+
+        assert result["bite_score"] == 0
+        assert result["is_spawn_period"] is True
+        assert "Нерестовый период" in result["spawn_message"]
+        assert result["season_multiplier"] == 0
+        assert result["temperature_score"] is None
+
+    def test_spawn_period_winter_fish(self, winter_fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("-5"),
+            pressure_hpa=1013,
+            pressure_trend=Decimal("0"),
+            wind_speed=Decimal("3"),
+            wind_direction=180,
+            cloudiness=50,
+            precipitation_mm=Decimal("0"),
+            moon_phase=Decimal("0.5"),
+            sunrise=time(8, 0),
+            sunset=time(17, 0),
+        )
+        result = calculate_bite_score(
+            weather, winter_fish_settings, hour=8, month=1, check_date=date(2025, 1, 15)
+        )
+
+        assert result["bite_score"] == 0
+        assert result["is_spawn_period"] is True
+        assert "Нерестовый период" in result["spawn_message"]
+
+    def test_graduated_winter_coefficients_december(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("-5"),
+            pressure_hpa=1013,
+            pressure_trend=Decimal("0"),
+            wind_speed=Decimal("3"),
+            wind_direction=180,
+            cloudiness=50,
+            precipitation_mm=Decimal("0"),
+            moon_phase=Decimal("0.5"),
+            sunrise=time(8, 0),
+            sunset=time(17, 0),
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=12, check_date=date(2025, 12, 15)
+        )
+
+        assert result["season_multiplier"] == 0.9
+        assert result["is_spawn_period"] is False
+
+    def test_graduated_winter_coefficients_january(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("-10"),
+            pressure_hpa=1013,
+            pressure_trend=Decimal("0"),
+            wind_speed=Decimal("3"),
+            wind_direction=180,
+            cloudiness=50,
+            precipitation_mm=Decimal("0"),
+            moon_phase=Decimal("0.5"),
+            sunrise=time(8, 0),
+            sunset=time(17, 0),
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=1, check_date=date(2025, 1, 20)
+        )
+
+        assert result["season_multiplier"] == 0.7
+        assert result["is_spawn_period"] is False
+
+    def test_graduated_winter_coefficients_february(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("-5"),
+            pressure_hpa=1013,
+            pressure_trend=Decimal("0"),
+            wind_speed=Decimal("3"),
+            wind_direction=180,
+            cloudiness=50,
+            precipitation_mm=Decimal("0"),
+            moon_phase=Decimal("0.5"),
+            sunrise=time(8, 0),
+            sunset=time(17, 0),
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=2, check_date=date(2025, 2, 15)
+        )
+
+        assert result["season_multiplier"] == 1.0
+        assert result["is_spawn_period"] is False
 
 
 class TestGenerateRecommendation:
@@ -623,3 +853,17 @@ class TestGetBestDepth:
     def test_unknown_fish_depth(self):
         depth = get_best_depth("Неизвестная рыба", "summer")
         assert depth == "2-4 м"
+
+
+class TestWinterMonthlyMultipliers:
+    def test_december_multipliers(self):
+        assert WINTER_MONTHLY_MULTIPLIERS[12]["active_fish"] == 0.9
+        assert WINTER_MONTHLY_MULTIPLIERS[12]["inactive_fish"] == 0.2
+
+    def test_january_multipliers(self):
+        assert WINTER_MONTHLY_MULTIPLIERS[1]["active_fish"] == 0.7
+        assert WINTER_MONTHLY_MULTIPLIERS[1]["inactive_fish"] == 0.1
+
+    def test_february_multipliers(self):
+        assert WINTER_MONTHLY_MULTIPLIERS[2]["active_fish"] == 1.0
+        assert WINTER_MONTHLY_MULTIPLIERS[2]["inactive_fish"] == 0.15

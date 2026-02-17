@@ -45,6 +45,32 @@ class FishSettings:
     prefer_overcast: bool
     moon_sensitivity: Decimal
     active_in_winter: bool
+    spawn_start_month: Optional[int] = None
+    spawn_end_month: Optional[int] = None
+    spawn_start_day: int = 1
+    spawn_end_day: int = 31
+
+
+WINTER_MONTHLY_MULTIPLIERS = {
+    12: {"active_fish": 0.9, "inactive_fish": 0.2},
+    1: {"active_fish": 0.7, "inactive_fish": 0.1},
+    2: {"active_fish": 1.0, "inactive_fish": 0.15},
+}
+
+MONTH_NAMES = {
+    1: "января",
+    2: "февраля",
+    3: "марта",
+    4: "апреля",
+    5: "мая",
+    6: "июня",
+    7: "июля",
+    8: "августа",
+    9: "сентября",
+    10: "октября",
+    11: "ноября",
+    12: "декабря",
+}
 
 
 def get_time_of_day(hour: int) -> TimeOfDay:
@@ -190,7 +216,12 @@ def calculate_time_score(time_of_day: TimeOfDay, fish: FishSettings) -> float:
 
 def get_season_multiplier(fish: FishSettings, month: int) -> float:
     if month in [12, 1, 2]:
-        return 1.2 if fish.active_in_winter else 0.3
+        multipliers = WINTER_MONTHLY_MULTIPLIERS[month]
+        return (
+            multipliers["active_fish"]
+            if fish.active_in_winter
+            else multipliers["inactive_fish"]
+        )
     elif month in [3, 4, 5]:
         return 1.0
     elif month in [6, 7, 8]:
@@ -199,12 +230,65 @@ def get_season_multiplier(fish: FishSettings, month: int) -> float:
         return 1.0
 
 
+def is_in_spawn_period(fish: FishSettings, check_date: date) -> Tuple[bool, str]:
+    if fish.spawn_start_month is None or fish.spawn_end_month is None:
+        return False, ""
+
+    month = check_date.month
+    day = check_date.day
+
+    start_month = fish.spawn_start_month
+    end_month = fish.spawn_end_month
+
+    is_spawn = False
+
+    if start_month <= end_month:
+        if start_month == end_month:
+            is_spawn = (
+                start_month == month
+                and fish.spawn_start_day <= day <= fish.spawn_end_day
+            )
+        else:
+            is_spawn = (
+                (start_month == month and day >= fish.spawn_start_day)
+                or (end_month == month and day <= fish.spawn_end_day)
+                or (start_month < month < end_month)
+            )
+    else:
+        is_spawn = (month >= start_month) or (month <= end_month)
+
+    if is_spawn:
+        message = f"Нерестовый период ({fish.spawn_start_day} {MONTH_NAMES[start_month]} - {fish.spawn_end_day} {MONTH_NAMES[end_month]}) — вылов запрещен"
+        return True, message
+
+    return False, ""
+
+
 def calculate_bite_score(
     weather: WeatherConditions,
     fish: FishSettings,
     hour: int,
     month: int,
+    check_date: Optional[date] = None,
 ) -> Dict[str, Any]:
+    if check_date is None:
+        check_date = date.today()
+
+    is_spawn, spawn_message = is_in_spawn_period(fish, check_date)
+    if is_spawn:
+        return {
+            "bite_score": 0,
+            "is_spawn_period": True,
+            "spawn_message": spawn_message,
+            "time_of_day": get_time_of_day(hour).value,
+            "temperature_score": None,
+            "pressure_score": None,
+            "wind_score": None,
+            "moon_score": None,
+            "precipitation_score": None,
+            "season_multiplier": 0,
+        }
+
     time_of_day = get_time_of_day(hour)
 
     temp_score = calculate_temperature_score(weather, fish)
@@ -230,6 +314,8 @@ def calculate_bite_score(
 
     return {
         "bite_score": round(bite_score, 1),
+        "is_spawn_period": False,
+        "spawn_message": None,
         "time_of_day": time_of_day.value,
         "temperature_score": round(temp_score, 1),
         "pressure_score": round(pressure_score, 1),
