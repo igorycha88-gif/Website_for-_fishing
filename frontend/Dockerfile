@@ -5,12 +5,15 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json ./
-RUN npm install
+RUN npm install --platform=linux --arch=arm64 --prefer-offline --no-audit --no-fund --legacy-peer-deps
 
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+ARG DOCKER_ENV=true
+ENV DOCKER_ENV=${DOCKER_ENV}
 
 RUN npm run build
 

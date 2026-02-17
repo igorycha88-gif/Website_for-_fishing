@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+.venv/
+.git
+.gitignore
+*.md
+Dockerfile
+.dockerignore
+docker-entrypoint.sh

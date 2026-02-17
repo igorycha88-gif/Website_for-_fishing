@@ -1,5 +1,20 @@
 version: '3.8'
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+    labels: "service"
+
+x-backend-resources: &backend-resources
+  limits:
+    cpus: '1'
+    memory: 512M
+  reservations:
+    cpus: '0.25'
+    memory: 256M
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -14,6 +29,22 @@ services:
       - "5432:5432"
     networks:
       - fishing-network
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fishing_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
   redis:
     image: redis:7-alpine
@@ -22,6 +53,22 @@ services:
       - redis_data:/data
     networks:
       - fishing-network
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   auth-service:
     build:
@@ -44,10 +91,17 @@ services:
       SERVICE_NAME: ${SERVICE_NAME:-auth-service}
     networks:
       - fishing-network
+    restart: unless-stopped
+    logging: *logging
     depends_on:
-      - postgres
-      - redis
-      - email-service
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      email-service:
+        condition: service_started
+    deploy:
+      resources: *backend-resources
 
   email-service:
     build:
@@ -69,9 +123,21 @@ services:
       SERVICE_NAME: ${SERVICE_NAME:-email-service}
     networks:
       - fishing-network
+    restart: unless-stopped
+    logging: *logging
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
 
   places-service:
     build:
@@ -82,15 +148,23 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      MAPBOX_API_KEY: ${MAPBOX_API_KEY}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
       SERVICE_NAME: ${SERVICE_NAME:-places-service}
     networks:
       - fishing-network
+    restart: unless-stopped
+    logging: *logging
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources: *backend-resources
 
   reports-service:
     build:
@@ -109,9 +183,15 @@ services:
       SERVICE_NAME: ${SERVICE_NAME:-reports-service}
     networks:
       - fishing-network
+    restart: unless-stopped
+    logging: *logging
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources: *backend-resources
 
   booking-service:
     build:
@@ -129,9 +209,15 @@ services:
       SERVICE_NAME: ${SERVICE_NAME:-booking-service}
     networks:
       - fishing-network
+    restart: unless-stopped
+    logging: *logging
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources: *backend-resources
 
   shop-service:
     build:
@@ -149,22 +235,81 @@ services:
       SERVICE_NAME: ${SERVICE_NAME:-shop-service}
     networks:
       - fishing-network
+    restart: unless-stopped
+    logging: *logging
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources: *backend-resources
+
+  forecast-service:
+    build:
+      context: ./services/forecast-service
+      dockerfile: Dockerfile
+    ports:
+      - "8007:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
+      SERVICE_NAME: ${SERVICE_NAME:-forecast-service}
+    networks:
+      - fishing-network
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources: *backend-resources
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        DOCKER_ENV: "true"
     ports:
       - "3000:3000"
     environment:
+      DOCKER_ENV: 'true'
       NEXT_PUBLIC_API_URL: http://localhost:3000
-      NEXT_PUBLIC_MAPBOX_API_KEY: ${MAPBOX_API_KEY}
+      NEXT_PUBLIC_YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY}
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+      AUTH_SERVICE_URL: http://auth-service:8000
+      PLACES_SERVICE_URL: http://places-service:8001
+      REPORTS_SERVICE_URL: http://reports-service:8002
+      BOOKING_SERVICE_URL: http://booking-service:8003
+      SHOP_SERVICE_URL: http://shop-service:8004
+      EMAIL_SERVICE_URL: http://email-service:8005
+      FORECAST_SERVICE_URL: http://forecast-service:8000
     networks:
       - fishing-network
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      - auth-service
+      - places-service
+      - reports-service
+      - booking-service
+      - shop-service
+      - email-service
+      - forecast-service
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
 networks:
   fishing-network:
