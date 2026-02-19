@@ -21,12 +21,15 @@ export interface WeatherSummary {
   moon_phase: number | null;
   sunrise: string | null;
   sunset: string | null;
+  timezone?: string;
 }
 
 export interface FishTypeBrief {
   id: string;
   name: string;
   icon: string | null;
+  category: string | null;
+  is_typical_for_region?: boolean;
 }
 
 export interface TimeOfDayForecast {
@@ -40,11 +43,15 @@ export interface TimeOfDayForecast {
   recommendation: string | null;
   best_baits: string[] | null;
   best_depth: string | null;
+  recommended_baits: string[] | null;
+  recommended_lures: string[] | null;
+  current_season: string | null;
 }
 
 export interface FishForecast {
   fish_type: FishTypeBrief;
   forecasts: TimeOfDayForecast[];
+  is_custom?: boolean;
 }
 
 export interface MultiDayForecastItem {
@@ -127,16 +134,52 @@ export function getBiteScoreLabel(score: number): string {
 
 export function getBiteScoreColor(score: number): string {
   if (score >= 80) return 'bg-green-500';
-  if (score >= 65) return 'bg-lime-500';
-  if (score >= 50) return 'bg-yellow-500';
-  if (score >= 35) return 'bg-orange-500';
-  return 'bg-red-500';
+  if (score >= 65) return 'bg-yellow-500';
+  if (score >= 50) return 'bg-orange-500';
+  if (score >= 35) return 'bg-red-400';
+  return 'bg-red-600';
 }
 
 export function getBiteScoreTextColor(score: number): string {
   if (score >= 80) return 'text-green-600';
-  if (score >= 65) return 'text-lime-600';
-  if (score >= 50) return 'text-yellow-600';
-  if (score >= 35) return 'text-orange-600';
-  return 'text-red-600';
+  if (score >= 65) return 'text-yellow-600';
+  if (score >= 50) return 'text-orange-600';
+  if (score >= 35) return 'text-red-500';
+  return 'text-red-700';
+}
+
+export function getMoonPhaseType(phase: number | null): string {
+  if (phase === null) return '';
+  
+  if (phase <= 0.05 || phase >= 0.95) return 'Новолуние';
+  if (phase >= 0.45 && phase <= 0.55) return 'Полнолуние';
+  if (phase < 0.5) return 'Растущая';
+  return 'Убывающая';
+}
+
+export function getMoonPhaseTooltip(phase: number | null): string {
+  if (phase === null) return '';
+  
+  const type = getMoonPhaseType(phase);
+  
+  const tooltips: Record<string, string> = {
+    'Новолуние': '🌑 Новолуние. Хорошее время для ночной рыбалки. Рыба активна.',
+    'Растущая': '🌒 Растущая луна. Благоприятно для хищной рыбы.',
+    'Полнолуние': '🌕 Полнолуние. Рыба может быть пассивной. Лучше рыбачить утром.',
+    'Убывающая': '🌗 Убывающая луна. Хороший клев белой рыбы.',
+  };
+  
+  return tooltips[type] || '';
+}
+
+export interface AvailableDatesResponse {
+  region_id: string;
+  dates: string[];
+}
+
+export interface DaySummaryResponse {
+  date: string;
+  temperature: number | null;
+  weather_icon: string | null;
+  wind_speed: number | null;
 }
