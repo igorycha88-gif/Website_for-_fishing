@@ -13,3 +13,27 @@
     text-wrap: balance;
   }
 }
+
+.rdp-day_hasForecast::after {
+  content: "";
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background-color: #3b82f6;
+}
+
+.rdp-day_hasForecast.rdp-day_selected::after,
+.rdp-day_hasForecast .rdp-day_button:has(.rdp-day_selected)::after {
+  background-color: white;
+}
+
+@media (max-width: 640px) {
+  .rdp-day_hasForecast::after {
+    width: 5px;
+    height: 5px;
+  }
+}

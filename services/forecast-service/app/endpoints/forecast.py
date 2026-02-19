@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Optional, List
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func
 from redis.asyncio import Redis
@@ -17,6 +17,7 @@ from app.models.forecast import (
     FishBiteSettings,
     FishingForecast,
     FishType,
+    UserAddedFish,
 )
 from app.schemas.forecast import (
     RegionResponse,
@@ -26,12 +27,15 @@ from app.schemas.forecast import (
     TimeOfDayForecast,
     WeatherSummaryResponse,
     MultiDayForecastItem,
+    AvailableDatesResponse,
+    DaySummaryResponse,
 )
 from app.services.forecast_calculation import (
     calculate_bite_score,
     generate_recommendation,
     get_best_baits,
     get_best_depth,
+    get_seasonal_recommendations,
     FishSettings,
     WeatherConditions,
 )
@@ -40,6 +44,30 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/forecast", tags=["forecast"])
 
 CACHE_TTL = 3600
+
+
+async def _get_user_id_from_token(
+    authorization: str | None = Header(None),
+) -> UUID | None:
+    if not authorization:
+        return None
+    try:
+        if authorization.startswith("Bearer "):
+            token = authorization[7:]
+            import httpx
+
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    "http://auth-service:8000/api/v1/users/me",
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=5.0,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return UUID(data["id"])
+    except Exception as e:
+        logger.debug(f"Failed to get user from token: {e}", service="forecast-service")
+    return None
 
 
 def _get_season(month: int) -> str:
@@ -91,6 +119,7 @@ async def get_forecast(
     fish_type_id: Optional[UUID] = Query(None, description="Filter by fish type"),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(lambda: redis_client),
+    user_id: UUID | None = Depends(_get_user_id_from_token),
 ):
     if forecast_date is None:
         forecast_date = date.today()
@@ -101,6 +130,7 @@ async def get_forecast(
         region_id=str(region_id),
         forecast_date=str(forecast_date),
         fish_type_id=str(fish_type_id) if fish_type_id else None,
+        user_id=str(user_id) if user_id else None,
     )
 
     result = await db.execute(
@@ -169,13 +199,24 @@ async def get_forecast(
         existing_forecasts = {f.time_of_day: f for f in fish_result.scalars().all()}
 
         time_forecasts = []
+        fish_settings_dict = {
+            "bait_recommendations": fish_settings.bait_recommendations or {},
+            "lure_recommendations": fish_settings.lure_recommendations or {},
+        }
         for tod in ["morning", "day", "evening", "night"]:
             if tod in existing_forecasts:
                 ef = existing_forecasts[tod]
+                fish_category = fish_types_map.get(fish_settings.fish_type_id)
+                category = fish_category.category if fish_category else None
+                baits, lures = get_seasonal_recommendations(
+                    fish_settings_dict, season, category or ""
+                )
                 time_forecasts.append(
                     TimeOfDayForecast(
                         time_of_day=ef.time_of_day,
                         bite_score=ef.bite_score,
+                        is_spawn_period=ef.is_spawn_period or False,
+                        spawn_message=ef.spawn_message,
                         temperature_score=ef.temperature_score,
                         pressure_score=ef.pressure_score,
                         wind_score=ef.wind_score,
@@ -184,6 +225,9 @@ async def get_forecast(
                         recommendation=ef.recommendation,
                         best_baits=ef.best_baits,
                         best_depth=ef.best_depth,
+                        recommended_baits=baits,
+                        recommended_lures=lures,
+                        current_season=season,
                     )
                 )
             else:
@@ -214,16 +258,22 @@ async def get_forecast(
                         prefer_overcast=fish_settings.prefer_overcast,
                         moon_sensitivity=fish_settings.moon_sensitivity,
                         active_in_winter=fish_settings.active_in_winter,
+                        spawn_start_month=fish_settings.spawn_start_month,
+                        spawn_end_month=fish_settings.spawn_end_month,
+                        spawn_start_day=fish_settings.spawn_start_day or 1,
+                        spawn_end_day=fish_settings.spawn_end_day or 31,
                     )
 
                     hour = list(hour_ranges[tod])[0]
                     calc_result = calculate_bite_score(
-                        avg_weather, fish_settings_obj, hour, month
+                        avg_weather, fish_settings_obj, hour, month, forecast_date
                     )
 
-                    rec = generate_recommendation(
-                        calc_result["bite_score"], avg_weather, fish_settings_obj
-                    )
+                    rec = None
+                    if not calc_result["is_spawn_period"]:
+                        rec = generate_recommendation(
+                            calc_result["bite_score"], avg_weather, fish_settings_obj
+                        )
 
                     fish_name_result = await db.execute(
                         select(FishBiteSettings.fish_type_id).where(
@@ -231,18 +281,31 @@ async def get_forecast(
                         )
                     )
 
+                    fish_category = fish_types_map.get(fish_settings.fish_type_id)
+                    category = fish_category.category if fish_category else None
+                    baits, lures = get_seasonal_recommendations(
+                        fish_settings_dict, season, category or ""
+                    )
+
                     time_forecasts.append(
                         TimeOfDayForecast(
                             time_of_day=tod,
                             bite_score=calc_result["bite_score"],
+                            is_spawn_period=calc_result["is_spawn_period"],
+                            spawn_message=calc_result["spawn_message"],
                             temperature_score=calc_result["temperature_score"],
                             pressure_score=calc_result["pressure_score"],
                             wind_score=calc_result["wind_score"],
                             moon_score=calc_result["moon_score"],
                             precipitation_score=calc_result["precipitation_score"],
                             recommendation=rec,
-                            best_baits=get_best_baits("", season),
+                            best_baits=get_best_baits("", season)
+                            if not calc_result["is_spawn_period"]
+                            else None,
                             best_depth=get_best_depth("", season),
+                            recommended_baits=baits,
+                            recommended_lures=lures,
+                            current_season=season,
                         )
                     )
 
@@ -260,6 +323,7 @@ async def get_forecast(
                         id=fish_type_id_val,
                         name=fish_type_obj.name if fish_type_obj else "",
                         icon=fish_type_obj.icon if fish_type_obj else None,
+                        category=fish_type_obj.category if fish_type_obj else None,
                     ),
                     forecasts=sorted(
                         time_forecasts,
@@ -273,6 +337,145 @@ async def get_forecast(
     fish_forecasts.sort(
         key=lambda x: sum(f.bite_score for f in x.forecasts), reverse=True
     )
+
+    typical_fish_ids = set()
+    for fish_settings in fish_settings_list:
+        if fish_settings.region_ids and region_id in fish_settings.region_ids:
+            typical_fish_ids.add(fish_settings.fish_type_id)
+
+    if user_id:
+        custom_result = await db.execute(
+            select(UserAddedFish).where(
+                UserAddedFish.user_id == user_id,
+                UserAddedFish.region_id == region_id,
+            )
+        )
+        custom_fish_records = custom_result.scalars().all()
+        custom_fish_type_ids = [cf.fish_type_id for cf in custom_fish_records]
+        existing_fish_type_ids = {ff.fish_type.id for ff in fish_forecasts}
+
+        for cf in custom_fish_records:
+            if cf.fish_type_id in existing_fish_type_ids:
+                continue
+
+            custom_settings_result = await db.execute(
+                select(FishBiteSettings).where(
+                    FishBiteSettings.fish_type_id == cf.fish_type_id
+                )
+            )
+            custom_settings = custom_settings_result.scalar_one_or_none()
+
+            if not custom_settings:
+                continue
+
+            fish_type_obj = fish_types_map.get(cf.fish_type_id)
+            if not fish_type_obj:
+                continue
+
+            time_forecasts = []
+            fish_settings_dict = {
+                "bait_recommendations": custom_settings.bait_recommendations or {},
+                "lure_recommendations": custom_settings.lure_recommendations or {},
+            }
+
+            for tod in ["morning", "day", "evening", "night"]:
+                hour_ranges = {
+                    "morning": range(6, 10),
+                    "day": range(10, 17),
+                    "evening": range(17, 21),
+                    "night": list(range(21, 24)) + list(range(0, 6)),
+                }
+
+                relevant_weather = [
+                    w for w in weather_records if w.forecast_hour in hour_ranges[tod]
+                ]
+
+                if relevant_weather:
+                    avg_weather = _get_average_weather(relevant_weather)
+
+                    fish_settings_obj = FishSettings(
+                        fish_type_id=custom_settings.fish_type_id,
+                        fish_name="",
+                        optimal_temp_min=custom_settings.optimal_temp_min,
+                        optimal_temp_max=custom_settings.optimal_temp_max,
+                        optimal_pressure_min=custom_settings.optimal_pressure_min,
+                        optimal_pressure_max=custom_settings.optimal_pressure_max,
+                        max_wind_speed=custom_settings.max_wind_speed,
+                        prefer_morning=custom_settings.prefer_morning,
+                        prefer_evening=custom_settings.prefer_evening,
+                        prefer_overcast=custom_settings.prefer_overcast,
+                        moon_sensitivity=custom_settings.moon_sensitivity,
+                        active_in_winter=custom_settings.active_in_winter,
+                        spawn_start_month=custom_settings.spawn_start_month,
+                        spawn_end_month=custom_settings.spawn_end_month,
+                        spawn_start_day=custom_settings.spawn_start_day or 1,
+                        spawn_end_day=custom_settings.spawn_end_day or 31,
+                    )
+
+                    hour = list(hour_ranges[tod])[0]
+                    calc_result = calculate_bite_score(
+                        avg_weather, fish_settings_obj, hour, month, forecast_date
+                    )
+
+                    rec = None
+                    if not calc_result["is_spawn_period"]:
+                        rec = generate_recommendation(
+                            calc_result["bite_score"], avg_weather, fish_settings_obj
+                        )
+
+                    category = fish_type_obj.category
+                    baits, lures = get_seasonal_recommendations(
+                        fish_settings_dict, season, category or ""
+                    )
+
+                    time_forecasts.append(
+                        TimeOfDayForecast(
+                            time_of_day=tod,
+                            bite_score=calc_result["bite_score"],
+                            is_spawn_period=calc_result["is_spawn_period"],
+                            spawn_message=calc_result["spawn_message"],
+                            temperature_score=calc_result["temperature_score"],
+                            pressure_score=calc_result["pressure_score"],
+                            wind_score=calc_result["wind_score"],
+                            moon_score=calc_result["moon_score"],
+                            precipitation_score=calc_result["precipitation_score"],
+                            recommendation=rec,
+                            best_baits=get_best_baits("", season)
+                            if not calc_result["is_spawn_period"]
+                            else None,
+                            best_depth=get_best_depth("", season),
+                            recommended_baits=baits,
+                            recommended_lures=lures,
+                            current_season=season,
+                        )
+                    )
+
+            if time_forecasts:
+                fish_forecasts.append(
+                    FishForecastResponse(
+                        fish_type=FishTypeBrief(
+                            id=cf.fish_type_id,
+                            name=fish_type_obj.name,
+                            icon=fish_type_obj.icon,
+                            category=fish_type_obj.category,
+                            is_typical_for_region=cf.fish_type_id in typical_fish_ids,
+                        ),
+                        forecasts=sorted(
+                            time_forecasts,
+                            key=lambda x: ["morning", "day", "evening", "night"].index(
+                                x.time_of_day
+                            ),
+                        ),
+                        is_custom=True,
+                    )
+                )
+
+        fish_forecasts.sort(
+            key=lambda x: sum(f.bite_score for f in x.forecasts), reverse=True
+        )
+
+    for ff in fish_forecasts:
+        ff.fish_type.is_typical_for_region = ff.fish_type.id in typical_fish_ids
 
     first_weather = weather_records[0]
     pressure_mm = None
@@ -295,6 +498,7 @@ async def get_forecast(
         else None,
         sunrise=str(first_weather.sunrise) if first_weather.sunrise else None,
         sunset=str(first_weather.sunset) if first_weather.sunset else None,
+        timezone=region.timezone,
     )
 
     multi_day = []
@@ -372,4 +576,81 @@ def _get_average_weather(weather_records: List[WeatherData]) -> WeatherCondition
         moon_phase=Decimal(str(moons[0])) if moons else None,
         sunrise=first.sunrise,
         sunset=first.sunset,
+    )
+
+
+@router.get("/{region_id}/available-dates", response_model=AvailableDatesResponse)
+async def get_available_dates(
+    region_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    logger.info(
+        "Getting available dates for region",
+        service="forecast-service",
+        region_id=str(region_id),
+    )
+
+    result = await db.execute(
+        select(WeatherData.forecast_date)
+        .where(WeatherData.region_id == region_id)
+        .distinct()
+        .order_by(WeatherData.forecast_date)
+    )
+    dates = [str(row[0]) for row in result.all()]
+
+    logger.info(
+        "Available dates retrieved",
+        service="forecast-service",
+        region_id=str(region_id),
+        dates_count=len(dates),
+    )
+
+    return AvailableDatesResponse(region_id=region_id, dates=dates)
+
+
+@router.get("/{region_id}/day-summary", response_model=DaySummaryResponse)
+async def get_day_summary(
+    region_id: UUID,
+    forecast_date: date = Query(..., description="Date in YYYY-MM-DD format"),
+    db: AsyncSession = Depends(get_db),
+):
+    logger.info(
+        "Getting day summary for region",
+        service="forecast-service",
+        region_id=str(region_id),
+        forecast_date=str(forecast_date),
+    )
+
+    result = await db.execute(
+        select(WeatherData)
+        .where(
+            WeatherData.region_id == region_id,
+            WeatherData.forecast_date == forecast_date,
+        )
+        .order_by(WeatherData.forecast_hour)
+        .limit(1)
+    )
+    weather = result.scalar_one_or_none()
+
+    if not weather:
+        logger.warning(
+            "Day not found",
+            service="forecast-service",
+            region_id=str(region_id),
+            forecast_date=str(forecast_date),
+        )
+        raise HTTPException(status_code=404, detail="Day not found")
+
+    logger.info(
+        "Day summary retrieved",
+        service="forecast-service",
+        region_id=str(region_id),
+        forecast_date=str(forecast_date),
+    )
+
+    return DaySummaryResponse(
+        date=str(forecast_date),
+        temperature=float(weather.temperature) if weather.temperature else None,
+        weather_icon=weather.weather_icon,
+        wind_speed=float(weather.wind_speed) if weather.wind_speed else None,
     )

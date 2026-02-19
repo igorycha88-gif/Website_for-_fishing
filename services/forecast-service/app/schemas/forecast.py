@@ -58,11 +58,15 @@ class FishTypeBrief(BaseModel):
     id: UUID
     name: str
     icon: Optional[str]
+    category: Optional[str] = None
+    is_typical_for_region: bool = True
 
 
 class TimeOfDayForecast(BaseModel):
     time_of_day: str
     bite_score: float
+    is_spawn_period: bool = False
+    spawn_message: Optional[str] = None
     temperature_score: Optional[float]
     pressure_score: Optional[float]
     wind_score: Optional[float]
@@ -71,11 +75,15 @@ class TimeOfDayForecast(BaseModel):
     recommendation: Optional[str]
     best_baits: Optional[List[str]]
     best_depth: Optional[str]
+    recommended_baits: Optional[List[str]] = None
+    recommended_lures: Optional[List[str]] = None
+    current_season: Optional[str] = None
 
 
 class FishForecastResponse(BaseModel):
     fish_type: FishTypeBrief
     forecasts: List[TimeOfDayForecast]
+    is_custom: bool = False
 
 
 class WeatherSummaryResponse(BaseModel):
@@ -86,6 +94,7 @@ class WeatherSummaryResponse(BaseModel):
     moon_phase: Optional[float]
     sunrise: Optional[str]
     sunset: Optional[str]
+    timezone: Optional[str] = None
 
 
 class MultiDayForecastItem(BaseModel):
@@ -110,3 +119,35 @@ class MyPlaceForecast(BaseModel):
 
 class MyPlacesForecastResponse(BaseModel):
     places: List[MyPlaceForecast]
+
+
+class CustomFishCreate(BaseModel):
+    fish_type_id: UUID
+
+
+class CustomFishResponse(BaseModel):
+    id: UUID
+    fish_type: FishTypeBrief
+    created_at: Optional[str] = None
+
+
+class CustomFishListResponse(BaseModel):
+    fish_types: List[CustomFishResponse]
+    total: int
+
+
+class AllFishTypesResponse(BaseModel):
+    fish_types: List[FishTypeBrief]
+    total: int
+
+
+class AvailableDatesResponse(BaseModel):
+    region_id: UUID
+    dates: List[str]
+
+
+class DaySummaryResponse(BaseModel):
+    date: str
+    temperature: Optional[float]
+    weather_icon: Optional[str]
+    wind_speed: Optional[float]
