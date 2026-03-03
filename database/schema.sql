@@ -22,6 +22,7 @@ CREATE TABLE users (
     is_active BOOLEAN DEFAULT true,
     is_verified BOOLEAN DEFAULT false,
     role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('user', 'moderator', 'admin')),
+    token_version INTEGER DEFAULT 1,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -31,6 +32,10 @@ CREATE TABLE refresh_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token VARCHAR(500) UNIQUE NOT NULL,
+    jti VARCHAR(36) UNIQUE NOT NULL,
+    revoked BOOLEAN DEFAULT false,
+    revoked_at TIMESTAMP,
+    replaced_by VARCHAR(36),
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -53,6 +58,7 @@ CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token);
+CREATE INDEX idx_refresh_tokens_jti ON refresh_tokens(jti);
 CREATE INDEX idx_email_verification_codes_email ON email_verification_codes(email);
 CREATE INDEX idx_email_verification_codes_expires_at ON email_verification_codes(expires_at);
 

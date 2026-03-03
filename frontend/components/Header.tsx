@@ -4,12 +4,12 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { Search, MapPin, ShoppingCart, Calendar, Fish, Menu, X, Bell, LogIn, UserPlus, User, ChevronDown, LogOut } from "lucide-react";
-import { useAuthStore } from "@/app/stores/useAuthStore";
+import { useAuthStore, logoutApi } from "@/app/stores/useAuthStore";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const { isAuthenticated, user, logout } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
 
   const menuItems = [
     { label: "Главная", href: "/" },
@@ -22,23 +22,26 @@ export function Header() {
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
+    const refreshToken = localStorage.getItem("refresh_token");
     if (token && !isAuthenticated) {
       fetch("http://localhost:8001/api/v1/users/me", {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((res) => res.json())
         .then((data) => {
-          useAuthStore.getState().login(token, data);
+          useAuthStore.getState().login(token, refreshToken || "", data);
         })
         .catch(() => {
           localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
         });
     }
   }, [isAuthenticated]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logoutApi();
     localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
     setIsUserMenuOpen(false);
   };
 

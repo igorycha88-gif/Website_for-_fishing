@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { User, Mail, CheckCircle, XCircle, MapPin, Settings, ShoppingCart, Package, Bell, FileText, Calendar } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { useAuthStore } from "@/app/stores/useAuthStore";
+import { useAuthStore, logoutApi } from "@/app/stores/useAuthStore";
 import ProfileTab from "./components/ProfileTab";
 import SettingsTab from "./components/SettingsTab";
 import MyPlacesTab from "./components/MyPlacesTab";
@@ -13,6 +13,7 @@ import OrdersTab from "./components/OrdersTab";
 import NotificationsTab from "./components/NotificationsTab";
 import ReportsTab from "./components/ReportsTab";
 import BookingsTab from "./components/BookingsTab";
+import { API_ENDPOINTS } from "@/app/lib/api";
 
 type TabType = "profile" | "settings" | "my-places" | "cart" | "orders" | "notifications" | "reports" | "bookings";
 
@@ -38,13 +39,14 @@ export default function ProfilePage() {
 
   const fetchUser = async () => {
     const token = localStorage.getItem("access_token");
+    const refreshToken = localStorage.getItem("refresh_token");
     if (!token) {
       window.location.href = "/register";
       return;
     }
 
     try {
-      const response = await fetch("http://localhost:8001/api/v1/users/me", {
+      const response = await fetch(API_ENDPOINTS.USERS.ME, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -52,22 +54,25 @@ export default function ProfilePage() {
 
       if (response.ok) {
         const userData = await response.json();
-        useAuthStore.getState().login(token, userData);
+        useAuthStore.getState().login(token, refreshToken || "", userData);
       } else {
         localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
         window.location.href = "/register";
       }
     } catch (err) {
       localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
       window.location.href = "/register";
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logoutApi();
     localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
     window.location.href = "/";
   };
 
@@ -109,12 +114,9 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-deepBlue to-primary-sea/20 py-20">
       <div className="container mx-auto px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="max-w-6xl mx-auto"
-        >
+      <div
+        className="max-w-6xl mx-auto"
+      >
           <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
             <div className="bg-gradient-to-r from-primary-deepBlue to-primary-sea p-8 text-white">
               <div className="flex items-center gap-4">
@@ -142,41 +144,33 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="flex flex-col lg:flex-row min-h-[600px]">
-              <div className="lg:w-64 border-b lg:border-b-0 lg:border-r border-gray-200">
-                <nav className="p-4 space-y-1">
-                  {tabs.map((tab) => {
-                    const Icon = tab.icon;
-                    return (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                          activeTab === tab.id
-                            ? "bg-primary-sea/10 text-primary-sea font-semibold"
-                            : "text-gray-600 hover:bg-gray-100"
-                        }`}
-                      >
-                        <Icon className="w-5 h-5" />
-                        <span className="hidden lg:inline">{tab.label}</span>
-                      </button>
-                    );
-                  })}
-                </nav>
-              </div>
+              <div className="flex flex-col lg:flex-row min-h-[600px]">
+               <div className="lg:w-64 border-b lg:border-b-0 lg:border-r border-gray-200">
+                 <nav className="p-4 space-y-1">
+                   {tabs.map((tab) => {
+                     const Icon = tab.icon;
+                     return (
+                       <button
+                         key={tab.id}
+                         onClick={() => setActiveTab(tab.id)}
+                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+                           activeTab === tab.id
+                             ? "bg-primary-sea/10 text-primary-sea font-semibold"
+                             : "text-gray-600 hover:bg-gray-100"
+                         }`}
+                       >
+                         <Icon className="w-5 h-5" />
+                         <span className="hidden lg:inline">{tab.label}</span>
+                       </button>
+                     );
+                   })}
+                 </nav>
+               </div>
 
-              <div className="flex-1 p-6">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activeTab}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {renderTab()}
-                  </motion.div>
-                </AnimatePresence>
+               <div className="flex-1 p-6">
+                 <div className="w-full">
+                   {renderTab()}
+                 </div>
               </div>
             </div>
           </div>
@@ -195,7 +189,7 @@ export default function ProfilePage() {
               Выйти из аккаунта
             </button>
           </div>
-        </motion.div>
+        </div>
       </div>
     </div>
   );

@@ -5,7 +5,9 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../shared-utils")))
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../shared-utils"))
+)
 
 from app.models.user import User
 
@@ -15,11 +17,7 @@ class UserCRUD:
         self.db = db
 
     async def create(self, email: str, username: str, password_hash: str) -> User:
-        user = User(
-            email=email,
-            username=username,
-            password_hash=password_hash
-        )
+        user = User(email=email, username=username, password_hash=password_hash)
         self.db.add(user)
         await self.db.commit()
         await self.db.refresh(user)
@@ -45,6 +43,22 @@ class UserCRUD:
         user = await self.get_by_email(email)
         if user:
             user.is_verified = True
+            await self.db.commit()
+            await self.db.refresh(user)
+        return user
+
+    async def update_password(self, user_id: str, password_hash: str) -> Optional[User]:
+        user = await self.get_by_id(user_id)
+        if user:
+            user.password_hash = password_hash
+            await self.db.commit()
+            await self.db.refresh(user)
+        return user
+
+    async def increment_token_version(self, user_id: str) -> Optional[User]:
+        user = await self.get_by_id(user_id)
+        if user:
+            user.token_version = (user.token_version or 1) + 1
             await self.db.commit()
             await self.db.refresh(user)
         return user
