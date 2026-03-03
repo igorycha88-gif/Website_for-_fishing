@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Text
+from sqlalchemy import Column, String, Boolean, DateTime, Text, Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -16,10 +16,10 @@ class User(Base):
     last_name = Column(String(100))
     phone = Column(String(20))
     avatar_url = Column(String(500))
-    birth_date = Column(DateTime)
-    city = Column(String(100))
-    bio = Column(Text)
+    city = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    role = Column(String(20), default="user")
+    token_version = Column(Integer, default=1)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

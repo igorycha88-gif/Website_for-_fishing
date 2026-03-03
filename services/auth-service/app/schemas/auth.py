@@ -21,13 +21,12 @@ class UserResponse(BaseModel):
     last_name: Optional[str] = None
     phone: Optional[str] = None
     avatar_url: Optional[str] = None
-    birth_date: Optional[datetime] = None
     city: Optional[str] = None
-    bio: Optional[str] = None
     is_verified: bool
+    role: Optional[str] = None
     created_at: datetime
 
-    @field_validator('id', mode='before')
+    @field_validator("id", mode="before")
     @classmethod
     def convert_uuid_to_str(cls, v: Union[str, uuid.UUID]) -> str:
         if isinstance(v, uuid.UUID):
@@ -43,9 +42,9 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
     avatar_url: Optional[str] = Field(None, max_length=500)
-    birth_date: Optional[datetime] = None
-    city: Optional[str] = Field(None, max_length=100)
-    bio: Optional[str] = Field(None, max_length=2000)
+    city: Optional[str] = Field(
+        None, max_length=100, pattern="^[a-zA-Zа-яА-ЯёЁ0-9\\s\\-]+$"
+    )
 
 
 class PasswordUpdate(BaseModel):
@@ -61,6 +60,18 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    expires_in: int = 1800
+
+
+class RefreshTokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int = 1800
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 
 class RegisterRequest(BaseModel):
@@ -72,3 +83,12 @@ class RegisterRequest(BaseModel):
 class VerifyEmailRequest(BaseModel):
     email: EmailStr
     code: str = Field(..., min_length=6, max_length=6)
+
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordConfirm(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8)
