@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { filterRequestHeaders } from '@/lib/header_filter';
 
 const SERVICES: Record<string, string> = {
   '/api/v1/auth': process.env.AUTH_SERVICE_URL || 'http://auth-service:8000',
@@ -10,6 +11,8 @@ const SERVICES: Record<string, string> = {
   '/api/v1/booking': process.env.BOOKING_SERVICE_URL || 'http://booking-service:8003',
   '/api/v1/shop': process.env.SHOP_SERVICE_URL || 'http://shop-service:8004',
   '/api/v1/email': process.env.EMAIL_SERVICE_URL || 'http://email-service:8005',
+  '/api/v1/regions': process.env.FORECAST_SERVICE_URL || 'http://forecast-service:8000',
+  '/api/v1/forecast': process.env.FORECAST_SERVICE_URL || 'http://forecast-service:8000',
 };
 
 export async function middleware(request: NextRequest) {
@@ -19,13 +22,7 @@ export async function middleware(request: NextRequest) {
     if (pathname.startsWith(prefix)) {
       const targetUrl = `${baseUrl}${pathname}${search}`;
 
-      const headers = new Headers();
-      request.headers.forEach((value, key) => {
-        const lowerKey = key.toLowerCase();
-        if (lowerKey !== 'host' && lowerKey !== 'content-length') {
-          headers.set(key, value);
-        }
-      });
+      const headers = filterRequestHeaders(request);
 
       const hasBody = ['POST', 'PUT', 'PATCH'].includes(request.method);
       const body = hasBody ? await request.arrayBuffer() : null;
