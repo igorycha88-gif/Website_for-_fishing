@@ -1,19 +1,24 @@
 FROM node:20-alpine AS base
 
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
-
+RUN apk add --no-cache libc6-compat
 COPY package.json ./
 RUN npm install --platform=linux --arch=arm64 --prefer-offline --no-audit --no-fund --legacy-peer-deps
 
 FROM base AS builder
 WORKDIR /app
+
+ARG NEXT_PUBLIC_YANDEX_MAPS_API_KEY
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+
+ENV NEXT_PUBLIC_YANDEX_MAPS_API_KEY=$NEXT_PUBLIC_YANDEX_MAPS_API_KEY
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=$NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-ARG DOCKER_ENV=true
-ENV DOCKER_ENV=${DOCKER_ENV}
 
 RUN npm run build
 

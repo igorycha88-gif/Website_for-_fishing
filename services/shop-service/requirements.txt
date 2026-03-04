@@ -9,3 +9,4 @@ redis==5.2.0
 httpx==0.28.0
 stripe==11.0.0
 python-dotenv==1.0.1
+hvac>=2.1.0

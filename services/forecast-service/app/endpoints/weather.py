@@ -1,10 +1,11 @@
 from datetime import date
 from uuid import UUID
-from typing import Optional
+from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from pydantic import BaseModel
 
 from app.core.database import get_db, redis_client
 from app.models.forecast import Region
@@ -20,6 +21,11 @@ from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/weather", tags=["weather"])
+
+
+class WeatherCollectRequest(BaseModel):
+    region_codes: Optional[List[str]] = None
+    days: int = 3
 
 
 def get_weather_service() -> WeatherService:
@@ -144,3 +150,71 @@ async def get_scheduler_jobs():
         )
 
     return {"jobs": jobs, "running": scheduler.running}
+
+
+@router.post("/collect")
+async def collect_weather_data(
+    request: WeatherCollectRequest = Body(default=WeatherCollectRequest()),
+    db: AsyncSession = Depends(get_db),
+):
+    logger.info(
+        "Manual weather collect triggered",
+        service="forecast-service",
+        region_codes=request.region_codes,
+        days=request.days,
+    )
+
+    collector = WeatherCollectorService(db)
+
+    if request.region_codes and len(request.region_codes) > 0:
+        result = await db.execute(
+            select(Region).where(
+                Region.code.in_(request.region_codes), Region.is_active == True
+            )
+        )
+        regions = result.scalars().all()
+
+        if not regions:
+            raise HTTPException(
+                status_code=404, detail="No regions found with given codes"
+            )
+
+        collected = 0
+        total_records = 0
+        errors = []
+
+        for region in regions:
+            try:
+                records = await collector._collect_region_weather(
+                    region_id=region.id,
+                    lat=float(region.latitude),
+                    lon=float(region.longitude),
+                    days=request.days,
+                )
+                total_records += records
+                collected += 1
+            except Exception as e:
+                errors.append({"region": region.name, "error": str(e)})
+                logger.error(
+                    f"Error collecting weather for {region.name}: {e}",
+                    service="forecast-service",
+                    region_code=region.code,
+                    error=str(e),
+                )
+
+        return {
+            "status": "success" if collected > 0 else "error",
+            "collected": collected,
+            "total_records": total_records,
+            "errors": errors,
+        }
+    else:
+        result = await collector.collect_all_regions(days=request.days)
+
+        if result.get("status") == "error":
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("message", "Weather collection failed"),
+            )
+
+        return result

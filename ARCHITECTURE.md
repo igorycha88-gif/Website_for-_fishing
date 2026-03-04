@@ -9,7 +9,7 @@ The Fishing Platform is a microservices-based application built with:
 - **Cache**: Redis
 - **Infrastructure**: Docker with docker-compose (development), Docker Swarm (production planned)
 
-**Current Status**: Early development phase. Only Auth Service and Email Service are fully implemented. Other services are placeholders.
+**Current Status**: Early development phase. Auth Service, Email Service, and Forecast Service (Phase 1) are implemented. Other services are placeholders.
 
 ## Microservices Architecture
 
@@ -23,6 +23,7 @@ The Fishing Platform is a microservices-based application built with:
 | Booking | 8003 | 8004 | 🚧 Placeholder |
 | Shop | 8004 | 8005 | 🚧 Placeholder |
 | Email | 8005 | 8006 | ✅ Implemented |
+| Forecast | 8000 | 8007 | ✅ Phase 1 |
 | Frontend | 3000 | 3000 | ✅ Implemented |
 
 ## Service Details
@@ -142,8 +143,8 @@ The Fishing Platform is a microservices-based application built with:
 - SMTP integration with fallback
 
 **Implemented API Routes:**
-- `POST /api/v1/email/send` - Send verification email
-- `POST /api/v1/email/generate-code` - Generate verification code
+- `POST /api/v1/email/send` - Send verification email (requires `X-API-Key`)
+- `POST /api/v1/email/generate-code` - Generate verification code (requires `X-API-Key`)
 
 **Health Check:**
 - `GET /health` - Service health status
@@ -154,6 +155,43 @@ The Fishing Platform is a microservices-based application built with:
 - Email sending toggle (development mode)
 - Structured logging with Logstash integration
 - Async email sending
+- **API Key authentication** for service-to-service communication (SEC-005)
+
+**Environment Variables:**
+- `EMAIL_SERVICE_API_KEY` - API key for authentication (min 32 chars)
+
+### 7. Forecast Service (Host: 8007, Container: 8000) ✅
+**Status**: Phase 1 Implemented
+
+**Responsibilities:**
+- Fishing forecast based on weather conditions
+- OpenWeatherMap API integration
+- Regions of Russia data (85 subjects)
+- Weather data caching in Redis
+
+**Implemented API Routes:**
+- `GET /api/v1/regions` - List all regions
+- `GET /api/v1/regions/:id` - Get region by ID
+- `GET /api/v1/weather/current/:region_id` - Current weather by region
+- `GET /api/v1/weather/currentByCoords` - Weather by coordinates
+
+**Health Check:**
+- `GET /health` - Service health status
+
+**Database Tables:**
+- `regions` - 85 regions of Russia (name, code, latitude, longitude, timezone)
+- `weather_data` - Hourly weather data
+- `fish_bite_settings` - Fish bite settings by species
+- `fishing_forecasts` - Fishing forecasts
+
+**Features:**
+- OpenWeatherMap API (free tier: 1000 req/day)
+- Redis caching (TTL: 1 hour)
+- Automatic seed of 85 Russian regions on startup
+- Unit tests (25+ tests)
+
+**Environment Variables:**
+- `OPENWEATHERMAP_API_KEY` - Required
 
 ## Frontend Structure
 
@@ -310,10 +348,10 @@ Key: api:{endpoint}:{params_hash}
 Value: {response_data}
 TTL: 5-60 minutes
 
-# Rate Limiting
-Key: ratelimit:{user_id}:{endpoint}
+# Rate Limiting (✅ Implemented - SEC-004)
+Key: rate_limit:{ip}:{endpoint}
 Value: request_count
-TTL: 1 minute
+TTL: По окну лимита (1 min / 1 hour)
 ```
 
 ## Security
@@ -333,6 +371,138 @@ TTL: 1 minute
 - Input validation (Pydantic)
 - SQL injection prevention (SQLAlchemy)
 - XSS protection (React escaping)
+
+## Rate Limiting
+
+### Implementation
+- **Library**: fastapi-limiter (Redis-based)
+- **Algorithm**: Sliding Window
+- **Key Format**: `rate_limit:{client_ip}:{endpoint}`
+
+### Configured Limits
+
+| Endpoint | Limit | Window | Purpose |
+|----------|-------|--------|---------|
+| `/api/v1/auth/login` | 5 | minute | Brute-force protection |
+| `/api/v1/auth/register` | 10 | hour | Mass registration prevention |
+| `/api/v1/auth/reset-password/request` | 3 | hour | Email flooding prevention |
+| `/api/v1/auth/verify-email` | 5 | minute | Code enumeration prevention |
+
+### Response Format (HTTP 429)
+```json
+{
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Too many requests. Please try again later.",
+    "details": {
+      "retry_after": 45,
+      "limit": "5/minute"
+    }
+  }
+}
+```
+
+### Response Headers
+- `X-RateLimit-Limit`: Maximum requests per window
+- `X-RateLimit-Remaining`: Remaining requests
+- `X-RateLimit-Reset`: Unix timestamp of window reset
+- `Retry-After`: Seconds until retry allowed
+
+### Configuration
+```bash
+# .env
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_LOGIN=5/minute
+RATE_LIMIT_REGISTER=10/hour
+RATE_LIMIT_RESET_PASSWORD=3/hour
+RATE_LIMIT_VERIFY_EMAIL=5/minute
+```
+
+## CORS Configuration
+
+All backend services use a unified CORS configuration:
+
+- **Development**: Automatically allows `localhost:3000`, `127.0.0.1:3000`, `localhost:3001`
+- **Production**: Only origins specified in `CORS_ORIGINS` environment variable
+
+Allowed methods: `GET`, `POST`, `PUT`, `DELETE`, `OPTIONS`
+Allowed headers: `Content-Type`, `Authorization`, `X-Requested-With`
+Credentials: Enabled
+
+**Configuration:**
+```python
+# In config.py
+CORS_ORIGINS: str = ""  # Comma-separated list
+
+@property
+def cors_origins_list(self) -> List[str]:
+    # Returns validated origins with dev fallback
+```
+
+**Example:**
+```bash
+# .env
+CORS_ORIGINS=https://fishmap.ru,https://api.fishmap.ru
+```
+
+## Service-to-Service Authentication
+
+### API Key Authentication (SEC-005)
+
+Email Service endpoints are protected with API Key authentication to prevent unauthorized access from external sources.
+
+**Protected Endpoints:**
+- `POST /api/v1/email/generate-code`
+- `POST /api/v1/email/send`
+
+**Authentication Method:**
+- Header: `X-API-Key`
+- Storage: Environment variable `EMAIL_SERVICE_API_KEY`
+- Validation: Minimum 32 characters
+
+**Configuration:**
+```bash
+# .env
+EMAIL_SERVICE_API_KEY=your-secure-api-key-min-32-chars-here
+```
+
+**Usage in Auth Service:**
+```python
+# services/auth-service/app/endpoints/auth.py
+api_headers = {"X-API-Key": settings.EMAIL_SERVICE_API_KEY}
+
+async with httpx.AsyncClient() as client:
+    response = await client.post(
+        f"{settings.EMAIL_SERVICE_URL}/api/v1/email/generate-code",
+        headers=api_headers,
+        timeout=10.0,
+    )
+```
+
+**Error Responses:**
+```json
+// 401 Unauthorized - API Key missing
+{
+  "detail": {
+    "code": "API_KEY_REQUIRED",
+    "message": "X-API-Key header is required"
+  }
+}
+
+// 403 Forbidden - Invalid API Key
+{
+  "detail": {
+    "code": "INVALID_API_KEY",
+    "message": "Invalid API key"
+  }
+}
+```
+
+**Security Considerations:**
+- API Key must be at least 32 characters
+- Key is shared between Auth Service and Email Service via environment variable
+- Key should be rotated periodically (manual process)
+- Key should be masked in logs
 
 ## Error Handling
 
@@ -417,7 +587,7 @@ Docker Swarm Cluster
 7. **API Gateway** - GraphQL Gateway or centralized routing
 8. **Monitoring** - Prometheus, Grafana
 9. **WebSocket** - Real-time notifications
-10. **Rate Limiting** - Per-user and per-IP limits
+10. ~~**Rate Limiting** - Per-user and per-IP limits~~ ✅ Implemented (SEC-004)
 
 ## Development Roadmap
 

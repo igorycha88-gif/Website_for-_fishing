@@ -960,3 +960,326 @@ class TestPlaceFishTypesValidation:
                 visibility="private",
                 images=[],
             )
+
+
+@pytest.mark.asyncio
+class TestPublicPlacesAPI:
+    async def test_get_public_places(self, db: AsyncSession):
+        user_id1 = uuid4()
+        user_id2 = uuid4()
+
+        public_place1 = Place(
+            owner_id=user_id1,
+            name="Публичное место 1",
+            latitude=55.75,
+            longitude=37.61,
+            address="г. Москва",
+            place_type="wild",
+            access_type="car",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="public",
+            is_active=True,
+            images=[],
+        )
+
+        public_place2 = Place(
+            owner_id=user_id2,
+            name="Публичное место 2",
+            latitude=55.76,
+            longitude=37.62,
+            address="г. Москва",
+            place_type="camping",
+            access_type="foot",
+            fish_types=[str(uuid4())],
+            seasonality=["winter"],
+            visibility="public",
+            is_active=True,
+            images=[],
+        )
+
+        private_place = Place(
+            owner_id=user_id1,
+            name="Личное место",
+            latitude=55.77,
+            longitude=37.63,
+            address="г. Москва",
+            place_type="wild",
+            access_type="car",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="private",
+            is_active=True,
+            images=[],
+        )
+
+        db.add(public_place1)
+        db.add(public_place2)
+        db.add(private_place)
+        await db.commit()
+
+        from app.crud.place import crud_place
+
+        places = await crud_place.get_public_places(db=db)
+
+        assert len(places) == 2
+        assert all(p.visibility == "public" for p in places)
+        assert all(p.is_active == True for p in places)
+
+    async def test_count_public_places(self, db: AsyncSession):
+        user_id = uuid4()
+
+        for i in range(3):
+            place = Place(
+                owner_id=user_id,
+                name=f"Публичное место {i}",
+                latitude=55.75 + i * 0.01,
+                longitude=37.61 + i * 0.01,
+                address="г. Москва",
+                place_type="wild",
+                access_type="car",
+                fish_types=[str(uuid4())],
+                seasonality=["summer"],
+                visibility="public",
+                is_active=True,
+                images=[],
+            )
+            db.add(place)
+
+        private_place = Place(
+            owner_id=user_id,
+            name="Личное место",
+            latitude=55.78,
+            longitude=37.64,
+            address="г. Москва",
+            place_type="wild",
+            access_type="car",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="private",
+            is_active=True,
+            images=[],
+        )
+        db.add(private_place)
+        await db.commit()
+
+        from app.crud.place import crud_place
+
+        count = await crud_place.count_public_places(db=db)
+
+        assert count == 3
+
+    async def test_get_public_and_user_places(self, db: AsyncSession):
+        user_id1 = uuid4()
+        user_id2 = uuid4()
+
+        public_place = Place(
+            owner_id=user_id1,
+            name="Публичное место",
+            latitude=55.75,
+            longitude=37.61,
+            address="г. Москва",
+            place_type="wild",
+            access_type="car",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="public",
+            is_active=True,
+            images=[],
+        )
+
+        private_place_user1 = Place(
+            owner_id=user_id1,
+            name="Личное место пользователя 1",
+            latitude=55.76,
+            longitude=37.62,
+            address="г. Москва",
+            place_type="wild",
+            access_type="car",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="private",
+            is_active=True,
+            images=[],
+        )
+
+        private_place_user2 = Place(
+            owner_id=user_id2,
+            name="Личное место пользователя 2",
+            latitude=55.77,
+            longitude=37.63,
+            address="г. Москва",
+            place_type="wild",
+            access_type="car",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="private",
+            is_active=True,
+            images=[],
+        )
+
+        db.add(public_place)
+        db.add(private_place_user1)
+        db.add(private_place_user2)
+        await db.commit()
+
+        from app.crud.place import crud_place
+
+        places = await crud_place.get_public_and_user_places(db=db, user_id=user_id1)
+
+        assert len(places) == 2
+        place_names = [p.name for p in places]
+        assert "Публичное место" in place_names
+        assert "Личное место пользователя 1" in place_names
+        assert "Личное место пользователя 2" not in place_names
+
+    async def test_count_public_and_user_places(self, db: AsyncSession):
+        user_id1 = uuid4()
+        user_id2 = uuid4()
+
+        public_place = Place(
+            owner_id=user_id1,
+            name="Публичное место",
+            latitude=55.75,
+            longitude=37.61,
+            address="г. Москва",
+            place_type="wild",
+            access_type="car",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="public",
+            is_active=True,
+            images=[],
+        )
+
+        private_place_user1 = Place(
+            owner_id=user_id1,
+            name="Личное место пользователя 1",
+            latitude=55.76,
+            longitude=37.62,
+            address="г. Москва",
+            place_type="wild",
+            access_type="car",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="private",
+            is_active=True,
+            images=[],
+        )
+
+        private_place_user2 = Place(
+            owner_id=user_id2,
+            name="Личное место пользователя 2",
+            latitude=55.77,
+            longitude=37.63,
+            address="г. Москва",
+            place_type="wild",
+            access_type="car",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="private",
+            is_active=True,
+            images=[],
+        )
+
+        db.add(public_place)
+        db.add(private_place_user1)
+        db.add(private_place_user2)
+        await db.commit()
+
+        from app.crud.place import crud_place
+
+        count = await crud_place.count_public_and_user_places(db=db, user_id=user_id1)
+
+        assert count == 2
+
+    async def test_get_public_places_with_filters(self, db: AsyncSession):
+        user_id = uuid4()
+
+        wild_place = Place(
+            owner_id=user_id,
+            name="Дикое место",
+            latitude=55.75,
+            longitude=37.61,
+            address="г. Москва",
+            place_type="wild",
+            access_type="car",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="public",
+            is_active=True,
+            images=[],
+        )
+
+        camping_place = Place(
+            owner_id=user_id,
+            name="Кэмпинг",
+            latitude=55.76,
+            longitude=37.62,
+            address="г. Москва",
+            place_type="camping",
+            access_type="foot",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="public",
+            is_active=True,
+            images=[],
+        )
+
+        db.add(wild_place)
+        db.add(camping_place)
+        await db.commit()
+
+        from app.crud.place import crud_place
+
+        places_wild = await crud_place.get_public_places(db=db, place_type="wild")
+        assert len(places_wild) == 1
+        assert places_wild[0].place_type == "wild"
+
+        places_camping = await crud_place.get_public_places(db=db, place_type="camping")
+        assert len(places_camping) == 1
+        assert places_camping[0].place_type == "camping"
+
+    async def test_inactive_places_not_shown_in_public(self, db: AsyncSession):
+        user_id = uuid4()
+
+        active_place = Place(
+            owner_id=user_id,
+            name="Активное место",
+            latitude=55.75,
+            longitude=37.61,
+            address="г. Москва",
+            place_type="wild",
+            access_type="car",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="public",
+            is_active=True,
+            images=[],
+        )
+
+        inactive_place = Place(
+            owner_id=user_id,
+            name="Неактивное место",
+            latitude=55.76,
+            longitude=37.62,
+            address="г. Москва",
+            place_type="wild",
+            access_type="car",
+            fish_types=[str(uuid4())],
+            seasonality=["summer"],
+            visibility="public",
+            is_active=False,
+            images=[],
+        )
+
+        db.add(active_place)
+        db.add(inactive_place)
+        await db.commit()
+
+        from app.crud.place import crud_place
+
+        places = await crud_place.get_public_places(db=db)
+
+        assert len(places) == 1
+        assert places[0].name == "Активное место"

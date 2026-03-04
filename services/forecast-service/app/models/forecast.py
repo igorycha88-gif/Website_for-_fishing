@@ -18,7 +18,7 @@ from sqlalchemy import (
     CheckConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ARRAY
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ARRAY, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -120,6 +120,8 @@ class FishBiteSettings(Base):
     spawn_start_day = Column(Integer, default=1)
     spawn_end_day = Column(Integer, default=31)
     region_ids = Column(ARRAY(PG_UUID(as_uuid=True)), default=[])
+    bait_recommendations = Column(JSONB, default={})
+    lure_recommendations = Column(JSONB, default={})
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -168,5 +170,36 @@ class FishingForecast(Base):
         ),
         CheckConstraint(
             "bite_score >= 0 AND bite_score <= 100", name="ck_forecast_bite_score"
+        ),
+    )
+
+
+class UserAddedFish(Base):
+    __tablename__ = "user_added_fish"
+
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    fish_type_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("fish_types.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    region_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("regions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "fish_type_id",
+            "region_id",
+            name="uq_user_added_fish_user_region",
         ),
     )

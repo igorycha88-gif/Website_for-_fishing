@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { User, Mail, Phone, MapPin, Calendar, FileText, Save } from "lucide-react";
+import { User, Phone, MapPin, Calendar, FileText, Save } from "lucide-react";
 import { useAuthStore } from "@/app/stores/useAuthStore";
 import { UserProfile } from "@/app/stores/useAuthStore";
+import { api, APIError, CSRFError } from "@/lib/api/client";
 
 export default function ProfileTab() {
   const { user, updateUser } = useAuthStore();
@@ -24,33 +25,18 @@ export default function ProfileTab() {
     setLoading(true);
     setMessage(null);
 
-    const token = localStorage.getItem("access_token");
-    if (!token) {
-      setMessage({ type: "error", text: "Не авторизован" });
-      setLoading(false);
-      return;
-    }
-
     try {
-      const response = await fetch("http://localhost:8001/api/v1/users/me", {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (response.ok) {
-        const updatedUser: UserProfile = await response.json();
-        updateUser(updatedUser);
-        setMessage({ type: "success", text: "Профиль успешно обновлен" });
-      } else {
-        const data = await response.json();
-        setMessage({ type: "error", text: data.detail?.message || "Ошибка обновления" });
-      }
+      const updatedUser = await api.put<UserProfile>("/users/me", formData);
+      updateUser(updatedUser);
+      setMessage({ type: "success", text: "Профиль успешно обновлен" });
     } catch (err) {
-      setMessage({ type: "error", text: "Ошибка соединения" });
+      if (err instanceof CSRFError) {
+        setMessage({ type: "error", text: "Ошибка безопасности. Обновите страницу." });
+      } else if (err instanceof APIError) {
+        setMessage({ type: "error", text: err.message || "Ошибка обновления" });
+      } else {
+        setMessage({ type: "error", text: "Ошибка соединения" });
+      }
     } finally {
       setLoading(false);
     }

@@ -10,6 +10,7 @@ import { API_ENDPOINTS } from "@/app/lib/api";
 import { useRateLimit } from "@/hooks/useRateLimit";
 import { RateLimitToast } from "@/components/auth/RateLimitToast";
 import { RateLimitError } from "@/lib/api/client";
+import { mapErrorToMessage } from "@/lib/utils/errorMapping";
 
 function VerifyEmailContent() {
   const router = useRouter();
@@ -56,7 +57,8 @@ function VerifyEmailContent() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.detail?.message || "Verification failed");
+        const errorCode = data.detail?.code || "INTERNAL_ERROR";
+        setError(mapErrorToMessage(errorCode));
         return;
       }
 
@@ -75,7 +77,7 @@ function VerifyEmailContent() {
 
         if (userResponse.ok) {
           const userData = await userResponse.json();
-          login(data.access_token, data.refresh_token || "", userData);
+          login(data.access_token, data.refresh_token || "", userData, data.csrf_token);
           router.push("/profile");
         } else {
           router.push("/login");

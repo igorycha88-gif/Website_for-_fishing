@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { Search, MapPin, ShoppingCart, Calendar, Fish, Menu, X, Bell, LogIn, UserPlus, User, ChevronDown, LogOut } from "lucide-react";
 import { useAuthStore, logoutApi } from "@/app/stores/useAuthStore";
+import { API_ENDPOINTS } from "@/app/lib/api";
 
 export function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -24,16 +25,26 @@ export function Header() {
     const token = localStorage.getItem("access_token");
     const refreshToken = localStorage.getItem("refresh_token");
     if (token && !isAuthenticated) {
-      fetch("http://localhost:8001/api/v1/users/me", {
+      fetch(API_ENDPOINTS.USERS.ME, {
         headers: { Authorization: `Bearer ${token}` },
       })
-        .then((res) => res.json())
+        .then((res) => {
+          if (!res.ok) {
+            throw new Error('Token invalid');
+          }
+          return res.json();
+        })
         .then((data) => {
-          useAuthStore.getState().login(token, refreshToken || "", data);
+          if (data && data.id) {
+            useAuthStore.getState().login(token, refreshToken || "", data);
+          } else {
+            throw new Error('Invalid user data');
+          }
         })
         .catch(() => {
           localStorage.removeItem("access_token");
           localStorage.removeItem("refresh_token");
+          useAuthStore.getState().logout();
         });
     }
   }, [isAuthenticated]);

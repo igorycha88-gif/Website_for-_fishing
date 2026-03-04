@@ -20,6 +20,7 @@ from app.services.forecast_calculation import (
     generate_recommendation,
     get_best_baits,
     get_best_depth,
+    get_seasonal_recommendations,
     WINTER_MONTHLY_MULTIPLIERS,
 )
 
@@ -867,3 +868,139 @@ class TestWinterMonthlyMultipliers:
     def test_february_multipliers(self):
         assert WINTER_MONTHLY_MULTIPLIERS[2]["active_fish"] == 1.0
         assert WINTER_MONTHLY_MULTIPLIERS[2]["inactive_fish"] == 0.15
+
+
+class TestGetSeasonalRecommendations:
+    def test_peaceful_fish_returns_baits(self):
+        fish_settings = {
+            "bait_recommendations": {
+                "winter": ["мотыль", "опарыш"],
+                "spring": ["червь", "перловка"],
+                "summer": ["кукуруза", "горох"],
+                "autumn": ["червь", "опарыш"],
+            },
+            "lure_recommendations": {},
+        }
+        baits, lures = get_seasonal_recommendations(fish_settings, "summer", "peaceful")
+        assert baits == ["кукуруза", "горох"]
+        assert lures is None
+
+    def test_predatory_fish_returns_lures(self):
+        fish_settings = {
+            "bait_recommendations": {},
+            "lure_recommendations": {
+                "winter": ["балансир", "блесна"],
+                "spring": ["джиг", "воблер"],
+                "summer": ["воблер", "силикон"],
+                "autumn": ["джиг", "блесна"],
+            },
+        }
+        baits, lures = get_seasonal_recommendations(
+            fish_settings, "winter", "predatory"
+        )
+        assert baits is None
+        assert lures == ["балансир", "блесна"]
+
+    def test_commercial_fish_returns_baits(self):
+        fish_settings = {
+            "bait_recommendations": {
+                "summer": ["бойлы", "пеллетс"],
+            },
+            "lure_recommendations": {},
+        }
+        baits, lures = get_seasonal_recommendations(
+            fish_settings, "summer", "commercial"
+        )
+        assert baits == ["бойлы", "пеллетс"]
+        assert lures is None
+
+    def test_sport_fish_returns_lures(self):
+        fish_settings = {
+            "bait_recommendations": {},
+            "lure_recommendations": {
+                "autumn": ["воблер", "стример"],
+            },
+        }
+        baits, lures = get_seasonal_recommendations(fish_settings, "autumn", "sport")
+        assert baits is None
+        assert lures == ["воблер", "стример"]
+
+    def test_empty_recommendations_returns_none(self):
+        fish_settings = {
+            "bait_recommendations": {},
+            "lure_recommendations": {},
+        }
+        baits, lures = get_seasonal_recommendations(fish_settings, "summer", "peaceful")
+        assert baits is None
+        assert lures is None
+
+    def test_none_fish_settings_returns_none(self):
+        baits, lures = get_seasonal_recommendations(None, "summer", "peaceful")
+        assert baits is None
+        assert lures is None
+
+    def test_empty_list_recommendations_returns_none(self):
+        fish_settings = {
+            "bait_recommendations": {
+                "winter": [],
+            },
+            "lure_recommendations": {},
+        }
+        baits, lures = get_seasonal_recommendations(fish_settings, "winter", "peaceful")
+        assert baits is None
+        assert lures is None
+
+    def test_unknown_category_returns_none(self):
+        fish_settings = {
+            "bait_recommendations": {
+                "summer": ["кукуруза"],
+            },
+            "lure_recommendations": {
+                "summer": ["воблер"],
+            },
+        }
+        baits, lures = get_seasonal_recommendations(fish_settings, "summer", "unknown")
+        assert baits is None
+        assert lures is None
+
+    def test_all_seasons_peaceful(self):
+        fish_settings = {
+            "bait_recommendations": {
+                "winter": ["мотыль"],
+                "spring": ["червь"],
+                "summer": ["кукуруза"],
+                "autumn": ["опарыш"],
+            },
+            "lure_recommendations": {},
+        }
+        for season, expected in [
+            ("winter", ["мотыль"]),
+            ("spring", ["червь"]),
+            ("summer", ["кукуруза"]),
+            ("autumn", ["опарыш"]),
+        ]:
+            baits, lures = get_seasonal_recommendations(
+                fish_settings, season, "peaceful"
+            )
+            assert baits == expected
+
+    def test_all_seasons_predatory(self):
+        fish_settings = {
+            "bait_recommendations": {},
+            "lure_recommendations": {
+                "winter": ["балансир"],
+                "spring": ["джиг"],
+                "summer": ["воблер"],
+                "autumn": ["блесна"],
+            },
+        }
+        for season, expected in [
+            ("winter", ["балансир"]),
+            ("spring", ["джиг"]),
+            ("summer", ["воблер"]),
+            ("autumn", ["блесна"]),
+        ]:
+            baits, lures = get_seasonal_recommendations(
+                fish_settings, season, "predatory"
+            )
+            assert lures == expected

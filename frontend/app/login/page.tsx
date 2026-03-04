@@ -28,6 +28,11 @@ export default function LoginPage() {
     
     setLoading(true);
     setError("");
+    
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("auth-storage");
+    console.log("[Login] Cleared old storage before login");
 
     try {
       const response = await fetch(API_ENDPOINTS.AUTH.LOGIN, {
@@ -52,6 +57,8 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok && data.access_token) {
+        console.log("[Login] Full response data:", JSON.stringify(data, null, 2));
+        console.log("[Login] csrf_token value:", data.csrf_token);
         localStorage.setItem("access_token", data.access_token);
 
         if (data.refresh_token) {
@@ -66,7 +73,39 @@ export default function LoginPage() {
 
         if (userResponse.ok) {
           const userData = await userResponse.json();
-          login(data.access_token, data.refresh_token || "", userData);
+
+          // If the backend returned no CSRF token (Redis unavailable at login time),
+          // try to recover it immediately via /auth/refresh before navigating.
+          // This prevents a guaranteed CSRF failure on the very first profile save.
+          let csrfToken: string | null = data.csrf_token || null;
+
+          if (!csrfToken && data.refresh_token) {
+            console.log("[Login] CSRF token missing — attempting recovery via token refresh");
+            try {
+              const refreshResp = await fetch("/api/v1/auth/refresh", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ refresh_token: data.refresh_token }),
+              });
+              if (refreshResp.ok) {
+                const refreshData = await refreshResp.json();
+                csrfToken = refreshData.csrf_token || null;
+                if (csrfToken) {
+                  console.log("[Login] CSRF token recovered via refresh");
+                } else {
+                  console.warn("[Login] Refresh succeeded but server still returned no CSRF token (Redis unavailable)");
+                }
+              } else {
+                console.warn("[Login] CSRF recovery refresh failed with status:", refreshResp.status);
+              }
+            } catch (refreshErr) {
+              console.warn("[Login] CSRF recovery refresh threw:", refreshErr);
+            }
+          }
+
+          console.log("[Login] Calling login() with csrf_token:", csrfToken);
+          login(data.access_token, data.refresh_token || "", userData, csrfToken ?? undefined);
+
           window.location.href = "/profile";
         }
       } else {

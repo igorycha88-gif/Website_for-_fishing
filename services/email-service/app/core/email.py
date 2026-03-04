@@ -1,14 +1,22 @@
 import aiosmtplib
 import secrets
+import logging
 from email.message import EmailMessage
 from typing import Optional
+from tenacity import retry, stop_after_attempt, wait_exponential
 from app.core.config import Settings
+from app.core.logging_config import get_logger
 
 
 settings = Settings()
+logger = get_logger(__name__)
 
 
-async def send_verification_email(to_email: str, verification_code: str, username: str) -> bool:
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+async def send_verification_email(
+    to_email: str, verification_code: str, username: str
+) -> bool:
+    logger.info("Sending verification email", to_email=to_email, username=username)
     try:
         message = EmailMessage()
         message["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>"
@@ -51,37 +59,44 @@ async def send_verification_email(to_email: str, verification_code: str, usernam
         """
 
         message.set_content(f"""
-Здравствуйте, {username}!
-
-Благодарим вас за регистрацию на платформе FishMap.
-
-Ваш код подтверждения email: {verification_code}
-
-Срок действия кода: {settings.EMAIL_CODE_EXPIRE_MINUTES} минут
-
-Если вы не регистрировались на нашем сайте, проигнорируйте это письмо.
-
-© 2024 FishMap. Все права защищены.
+        Здравствуйте, {username}!
+ 
+        Благодарим вас за регистрацию на платформе FishMap.
+ 
+        Ваш код подтверждения email: {verification_code}
+ 
+        Срок действия кода: {settings.EMAIL_CODE_EXPIRE_MINUTES} минут
+ 
+        Если вы не регистрировались на нашем сайте, проигнорируйте это письмо.
+ 
+        © 2024 FishMap. Все права защищены.
         """)
 
         message.set_content(html_content, subtype="html")
 
+        use_tls = settings.SMTP_PORT == 465
         await aiosmtplib.send(
             message,
             hostname=settings.SMTP_HOST,
             port=settings.SMTP_PORT,
             username=settings.SMTP_USER,
             password=settings.SMTP_PASSWORD,
-            use_tls=True,
-            timeout=30
+            use_tls=use_tls,
+            start_tls=not use_tls,
+            timeout=30,
         )
 
+        logger.info("Email sent successfully", to_email=to_email)
         return True
 
     except Exception as e:
-        print(f"Error sending email: {e}")
+        logger.error(
+            "Failed to send email", to_email=to_email, error=str(e), exc_info=True
+        )
         return False
 
 
 def generate_verification_code() -> str:
-    return "".join([str(secrets.randbelow(10)) for _ in range(settings.EMAIL_CODE_LENGTH)])
+    return "".join(
+        [str(secrets.randbelow(10)) for _ in range(settings.EMAIL_CODE_LENGTH)]
+    )
