@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { 
   Thermometer, 
@@ -77,6 +77,8 @@ export default function FishingForecast({
   longitude,
   showRegionSelector = true,
 }: FishingForecastProps) {
+  console.log("[FishingForecast] Render:", { defaultRegionId, latitude, longitude, showRegionSelector });
+  
   const { 
     loading, 
     error, 
@@ -110,36 +112,61 @@ export default function FishingForecast({
   const [noForecastMessage, setNoForecastMessage] = useState<string | null>(null);
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [daySummaries, setDaySummaries] = useState<Record<string, DaySummaryResponse>>({});
+  const [regionsError, setRegionsError] = useState<string | null>(null);
+  const regionSelectionRef = useRef(false);
+  const regionsLoadedRef = useRef(false);
 
   useEffect(() => {
+    console.log("[FishingForecast] Loading regions on mount");
     loadRegions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (defaultRegionId && regions.length > 0) {
+    if (regions.length === 0 || regionSelectionRef.current) return;
+    
+    console.log("[FishingForecast] Region selection effect triggered:", {
+      defaultRegionId,
+      latitude,
+      longitude,
+      regionsCount: regions.length,
+      hasSelectedRegion: !!selectedRegion,
+    });
+
+    if (defaultRegionId) {
       const region = regions.find((r) => r.id === defaultRegionId);
       if (region) {
+        console.log("[FishingForecast] Setting region from defaultRegionId:", region.name);
+        regionSelectionRef.current = true;
         setSelectedRegion(region);
       }
-    } else if (latitude && longitude && regions.length > 0) {
-      findNearestRegion(latitude, longitude).then((nearest) => {
-        if (nearest) {
-          setSelectedRegion(nearest);
+    } else if (latitude && longitude) {
+      console.log("[FishingForecast] Finding nearest region for coords:", latitude, longitude);
+      regionSelectionRef.current = true;
+      findNearestRegion(latitude, longitude).then((result) => {
+        if (result) {
+          console.log("[FishingForecast] Found nearest region:", result.name);
+          setSelectedRegion(result);
         }
       });
     }
-  }, [defaultRegionId, latitude, longitude, regions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultRegionId, latitude, longitude, regions.length]);
 
   useEffect(() => {
     if (selectedRegion) {
+      console.log("[FishingForecast] Loading forecast for region:", selectedRegion.name, selectedRegion.id);
       loadForecast(selectedRegion.id);
       loadAvailableDates(selectedRegion.id);
     }
-  }, [selectedRegion]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRegion?.id]);
 
   const loadAvailableDates = async (regionId: string) => {
+    console.log("[FishingForecast] loadAvailableDates called for region:", regionId);
     try {
       const response = await getAvailableDates(regionId);
+      console.log("[FishingForecast] Available dates loaded:", response.dates.length);
       setAvailableDates(response.dates);
       
       const summaries: Record<string, DaySummaryResponse> = {};
@@ -153,33 +180,52 @@ export default function FishingForecast({
       }
       setDaySummaries(summaries);
     } catch (err) {
-      console.error("Failed to load available dates:", err);
+      console.error("[FishingForecast] Failed to load available dates:", err);
     }
   };
 
   const loadRegions = async () => {
+    if (regionsLoadedRef.current) {
+      console.log("[FishingForecast] Regions already loaded, skipping");
+      return;
+    }
+    
+    console.log("[FishingForecast] loadRegions called");
+    regionsLoadedRef.current = true;
+    
     try {
       const response = await getRegions();
+      console.log("[FishingForecast] Regions loaded:", response.regions.length);
       setRegions(response.regions);
+      setRegionsError(null);
       
       if (!defaultRegionId && !latitude && response.regions.length > 0) {
         const moscow = response.regions.find((r) => r.code === "MOW");
+        console.log("[FishingForecast] Setting default region:", moscow?.name || response.regions[0].name);
         setSelectedRegion(moscow || response.regions[0]);
       }
     } catch (err) {
-      console.error("Failed to load regions:", err);
+      console.error("[FishingForecast] Failed to load regions:", err);
+      setRegionsError("Не удалось загрузить регионы. Проверьте подключение к серверу.");
+      regionsLoadedRef.current = false; // Allow retry on error
     }
   };
 
   const loadForecast = async (regionId: string, date?: string) => {
+    console.log("[FishingForecast] loadForecast called:", { regionId, date });
     setLoadingForecast(true);
     setNoForecastMessage(null);
     try {
       const response = await getForecast(regionId, date);
+      console.log("[FishingForecast] Forecast loaded:", { 
+        regionId, 
+        date: response.forecast_date,
+        fishCount: response.forecasts?.length || 0 
+      });
       setForecast(response);
       setSelectedDate(date || null);
     } catch (err) {
-      console.error("Failed to load forecast:", err);
+      console.error("[FishingForecast] Failed to load forecast:", err);
       if (date) {
         setNoForecastMessage("Прогноз на данный день недоступен");
         setForecast(null);
@@ -216,9 +262,11 @@ export default function FishingForecast({
 
   useEffect(() => {
     if (selectedRegion && isAuthenticated) {
+      console.log("[FishingForecast] Loading custom fish data for region:", selectedRegion.name);
       loadCustomFishData();
     }
-  }, [selectedRegion, isAuthenticated]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRegion?.id, isAuthenticated]);
 
   const handleOpenAddFishModal = async () => {
     if (!selectedRegion) return;
@@ -472,7 +520,23 @@ export default function FishingForecast({
         </div>
       ) : (
         <div className="p-4 space-y-4">
-          {error && !noForecastMessage && (
+          {regionsError && (
+            <div className="p-4 text-center bg-red-50 border border-red-200 rounded-xl">
+              <p className="text-red-600 font-medium mb-2">{regionsError}</p>
+              <button 
+                onClick={() => {
+                  setRegionsError(null);
+                  regionsLoadedRef.current = false;
+                  loadRegions();
+                }}
+                className="text-sm text-red-500 hover:text-red-700 underline"
+              >
+                Попробовать снова
+              </button>
+            </div>
+          )}
+          
+          {error && !noForecastMessage && !regionsError && (
             <div className="p-3 text-center text-red-500 bg-red-50 rounded-xl text-sm">
               {error}
             </div>
