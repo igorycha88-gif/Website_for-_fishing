@@ -1,22 +1,63 @@
 version: '3.8'
 
+secrets:
+  secret_key:
+    external: true
+  postgres_password:
+    external: true
+  smtp_password:
+    external: true
+  stripe_secret_key:
+    external: true
+  stripe_webhook_secret:
+    external: true
+  cloudinary_api_secret:
+    external: true
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+    labels: "service"
+
+x-healthcheck-backend: &healthcheck-backend
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 10s
+
+x-backend-resources: &backend-resources
+  limits:
+    cpus: '1'
+    memory: 512M
+  reservations:
+    cpus: '0.25'
+    memory: 256M
+
 services:
   traefik:
     image: traefik:v3.1
     command:
-      - --api.insecure=true
       - --api.dashboard=true
+      - --api.insecure=false
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
+      - --providers.docker.swarmMode=true
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
-      - --providers.docker.swarmMode=true
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@fishmap.local}
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --metrics.prometheus=true
+      - --metrics.prometheus.addentrypointslabels=true
+      - --metrics.prometheus.addserviceslabels=true
     ports:
       - "80:80"
       - "443:443"
-      - "8080:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
     networks:
       - fishing-network
     deploy:
@@ -25,21 +66,44 @@ services:
       placement:
         constraints:
           - node.role == manager
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-fishing_db}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     networks:
       - fishing-network
+    secrets:
+      - postgres_password
     deploy:
       mode: replicated
       replicas: 1
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    logging: *logging
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fishing_db}"]
       interval: 10s
@@ -56,6 +120,14 @@ services:
     deploy:
       mode: replicated
       replicas: 1
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging: *logging
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -68,29 +140,81 @@ services:
       context: ./services/auth-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:unused@postgres:5432/${POSTGRES_DB:-fishing_db}
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      SECRET_KEY: ${SECRET_KEY}
+      SECRET_KEY_FILE: /run/secrets/secret_key
       ALGORITHM: ${ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      EMAIL_SERVICE_URL: http://email-service:8005
+      ENABLE_EMAIL_SENDING: ${ENABLE_EMAIL_SENDING:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - fishing-network
+    secrets:
+      - secret_key
+      - postgres_password
+    depends_on:
+      - postgres
+      - redis
+      - email-service
+    deploy:
+      mode: replicated
+      replicas: 2
+      resources: *backend-resources
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.auth-service.rule=PathPrefix(`/api/v1/auth`, `/api/v1/users`, `/api/v1/maps`)"
+        - "traefik.http.routers.auth-service.entrypoints=websecure"
+        - "traefik.http.routers.auth-service.tls.certresolver=letsencrypt"
+        - "traefik.http.services.auth-service.loadbalancer.server.port=8000"
+        - "traefik.http.middlewares.auth-redirect.redirectscheme.scheme=https"
+        - "traefik.http.routers.auth-service-http.rule=PathPrefix(`/api/v1/auth`, `/api/v1/users`, `/api/v1/maps`)"
+        - "traefik.http.routers.auth-service-http.entrypoints=web"
+        - "traefik.http.routers.auth-service-http.middlewares=auth-redirect"
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      <<: *healthcheck-backend
+
+  email-service:
+    image: email-service:latest
+    build:
+      context: ./services/email-service
+      dockerfile: Dockerfile
+    environment:
+      SMTP_HOST: ${SMTP_HOST:-smtp.yandex.ru}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-FishMap}
+      ENABLE_EMAIL_SENDING: ${ENABLE_EMAIL_SENDING:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    networks:
+      - fishing-network
+    secrets:
+      - smtp_password
     depends_on:
       - postgres
       - redis
     deploy:
       mode: replicated
-      replicas: 2
+      replicas: 1
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
       labels:
-        - "traefik.enable=true"
-        - "traefik.http.routers.auth-service.rule=PathPrefix(`/api/v1/auth`, `/api/v1/users`)"
-        - "traefik.http.services.auth-service.loadbalancer.server.port=8000"
+        - "traefik.enable=false"
+    logging: *logging
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health')"]
+      <<: *healthcheck-backend
 
   places-service:
     image: places-service:latest
@@ -98,26 +222,38 @@ services:
       context: ./services/places-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:unused@postgres:5432/${POSTGRES_DB:-fishing_db}
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      MAPBOX_API_KEY: ${MAPBOX_API_KEY}
+      SECRET_KEY_FILE: /run/secrets/secret_key
+      YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - fishing-network
+    secrets:
+      - secret_key
+      - postgres_password
     depends_on:
       - postgres
       - redis
     deploy:
       mode: replicated
       replicas: 2
+      resources: *backend-resources
       labels:
         - "traefik.enable=true"
         - "traefik.http.routers.places-service.rule=PathPrefix(`/api/v1/places`)"
+        - "traefik.http.routers.places-service.entrypoints=websecure"
+        - "traefik.http.routers.places-service.tls.certresolver=letsencrypt"
         - "traefik.http.services.places-service.loadbalancer.server.port=8001"
+        - "traefik.http.middlewares.places-redirect.redirectscheme.scheme=https"
+        - "traefik.http.routers.places-service-http.rule=PathPrefix(`/api/v1/places`)"
+        - "traefik.http.routers.places-service-http.entrypoints=web"
+        - "traefik.http.routers.places-service-http.middlewares=places-redirect"
+    logging: *logging
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      <<: *healthcheck-backend
 
   reports-service:
     image: reports-service:latest
@@ -125,28 +261,35 @@ services:
       context: ./services/reports-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:unused@postgres:5432/${POSTGRES_DB:-fishing_db}
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      CLOUDINARY_API_SECRET_FILE: /run/secrets/cloudinary_api_secret
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - fishing-network
+    secrets:
+      - postgres_password
+      - cloudinary_api_secret
     depends_on:
       - postgres
       - redis
     deploy:
       mode: replicated
       replicas: 2
+      resources: *backend-resources
       labels:
         - "traefik.enable=true"
         - "traefik.http.routers.reports-service.rule=PathPrefix(`/api/v1/reports`)"
+        - "traefik.http.routers.reports-service.entrypoints=websecure"
+        - "traefik.http.routers.reports-service.tls.certresolver=letsencrypt"
         - "traefik.http.services.reports-service.loadbalancer.server.port=8002"
+    logging: *logging
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      <<: *healthcheck-backend
 
   booking-service:
     image: booking-service:latest
@@ -154,27 +297,35 @@ services:
       context: ./services/booking-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:unused@postgres:5432/${POSTGRES_DB:-fishing_db}
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_SECRET_KEY_FILE: /run/secrets/stripe_secret_key
+      STRIPE_WEBHOOK_SECRET_FILE: /run/secrets/stripe_webhook_secret
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - fishing-network
+    secrets:
+      - postgres_password
+      - stripe_secret_key
+      - stripe_webhook_secret
     depends_on:
       - postgres
       - redis
     deploy:
       mode: replicated
       replicas: 2
+      resources: *backend-resources
       labels:
         - "traefik.enable=true"
         - "traefik.http.routers.booking-service.rule=PathPrefix(`/api/v1/bookings`, `/api/v1/booking-slots`)"
+        - "traefik.http.routers.booking-service.entrypoints=websecure"
+        - "traefik.http.routers.booking-service.tls.certresolver=letsencrypt"
         - "traefik.http.services.booking-service.loadbalancer.server.port=8003"
+    logging: *logging
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      <<: *healthcheck-backend
 
   shop-service:
     image: shop-service:latest
@@ -182,48 +333,72 @@ services:
       context: ./services/shop-service
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:unused@postgres:5432/${POSTGRES_DB:-fishing_db}
+      DATABASE_PASSWORD_FILE: /run/secrets/postgres_password
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      STRIPE_SECRET_KEY_FILE: /run/secrets/stripe_secret_key
+      STRIPE_WEBHOOK_SECRET_FILE: /run/secrets/stripe_webhook_secret
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     networks:
       - fishing-network
+    secrets:
+      - postgres_password
+      - stripe_secret_key
+      - stripe_webhook_secret
     depends_on:
       - postgres
       - redis
     deploy:
       mode: replicated
       replicas: 2
+      resources: *backend-resources
       labels:
         - "traefik.enable=true"
         - "traefik.http.routers.shop-service.rule=PathPrefix(`/api/v1/shop`, `/api/v1/orders`)"
+        - "traefik.http.routers.shop-service.entrypoints=websecure"
+        - "traefik.http.routers.shop-service.tls.certresolver=letsencrypt"
         - "traefik.http.services.shop-service.loadbalancer.server.port=8004"
+    logging: *logging
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
+      <<: *healthcheck-backend
 
   frontend:
     image: frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY}
+        NEXT_PUBLIC_API_URL: https://${DOMAIN:-fishmap.local}
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost
-      NEXT_PUBLIC_MAPBOX_API_KEY: ${MAPBOX_API_KEY}
-      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+      DOCKER_ENV: 'true'
     networks:
       - fishing-network
     deploy:
       mode: replicated
       replicas: 2
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
       labels:
         - "traefik.enable=true"
         - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
+        - "traefik.http.routers.frontend.entrypoints=websecure"
+        - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
         - "traefik.http.services.frontend.loadbalancer.server.port=3000"
+        - "traefik.http.middlewares.frontend-redirect.redirectscheme.scheme=https"
+        - "traefik.http.routers.frontend-http.rule=PathPrefix(`/`)"
+        - "traefik.http.routers.frontend-http.entrypoints=web"
+        - "traefik.http.routers.frontend-http.middlewares=frontend-redirect"
+    logging: *logging
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -237,4 +412,6 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  traefik_letsencrypt:
     driver: local

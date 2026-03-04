@@ -8,6 +8,7 @@
 - **Auth Service** (порт 8001 хост, 8000 контейнер) - полностью реализован
 - **Email Service** (порт 8006 хост, 8005 контейнер) - полностью реализован
 - **Frontend** (порт 3000) - основные страницы реализованы
+- **Forecast Service** (порт 8007 хост, 8000 контейнер) - Этап 1 реализован
 
 ### Сервисы-заглушки 🚧
 - **Places Service** (порт 8002 хост, 8001 контейнер) - заглушка
@@ -430,6 +431,7 @@ http://localhost:5601
 | Booking | 8003 | 8004 | 🚧 Заглушка |
 | Shop | 8004 | 8005 | 🚧 Заглушка |
 | Email | 8005 | 8006 | ✅ Реализован |
+| Forecast | 8000 | 8007 | ✅ Этап 1 |
 
 **Правило портов**: `docker-compose.DEV_PORT = next.config.js.PORT`, `docker-compose.CONTAINER_PORT = Dockerfile.CMD`
 
@@ -460,6 +462,18 @@ http://localhost:5601
 {
   source: '/api/v1/email/:path*',
   destination: 'http://host.docker.internal:8006/api/v1/email/:path*'
+},
+{
+  source: '/api/v1/forecast/:path*',
+  destination: 'http://host.docker.internal:8007/api/v1/forecast/:path*'
+},
+{
+  source: '/api/v1/weather/:path*',
+  destination: 'http://host.docker.internal:8007/api/v1/weather/:path*'
+},
+{
+  source: '/api/v1/regions/:path*',
+  destination: 'http://host.docker.internal:8007/api/v1/regions/:path*'
 }
 ```
 
@@ -535,9 +549,55 @@ dfb59053-0011-47fb-a6f1-a14efb9160d1
 
 **Реализованные эндпоинты:**
 ```
-POST   /api/v1/email/send         - Отправить email
-POST   /api/v1/email/generate-code - Сгенерировать код
+POST   /api/v1/email/send         - Отправить email (требует X-API-Key)
+POST   /api/v1/email/generate-code - Сгенерировать код (требует X-API-Key)
 GET    /health                      - Health check
+```
+
+**Безопасность (SEC-005):**
+- API Key аутентификация через заголовок `X-API-Key`
+- Ключ хранится в `EMAIL_SERVICE_API_KEY` (min 32 chars)
+- Auth Service передает API Key при вызове Email Service
+- 401 Unauthorized - если заголовок отсутствует (`API_KEY_REQUIRED`)
+- 403 Forbidden - если ключ неверный (`INVALID_API_KEY`)
+
+### Forecast Service (порт 8007 хост, 8000 контейнер) ✅
+
+**Responsibilities:**
+- Прогноз клева рыбы на основе погодных условий
+- Интеграция с OpenWeatherMap API
+- Хранение данных о регионах России (85 субъектов)
+- Кэширование погодных данных в Redis
+
+**Реализованные эндпоинты:**
+```
+GET    /api/v1/regions                   - Список всех регионов
+GET    /api/v1/regions/:id               - Регион по ID
+GET    /api/v1/weather/current/:region_id - Текущая погода по региону
+GET    /api/v1/weather/currentByCoords   - Погода по координатам
+GET    /health                           - Health check
+```
+
+**Модели БД:**
+- `regions` - 85 регионов России (name, code, latitude, longitude, timezone)
+- `weather_data` - почасовые погодные данные
+- `fish_bite_settings` - настройки клева по видам рыб
+- `fishing_forecasts` - прогнозы клева
+
+**Особенности:**
+- OpenWeatherMap API (бесплатно 1000 req/день)
+- Redis кэширование (TTL: 1 час)
+- Автоматический seed 85 регионов при старте
+- Unit тесты (25+ тестов)
+
+**Тесты:**
+- `services/forecast-service/tests/test_weather_service.py` - тесты WeatherService
+- `services/forecast-service/tests/test_models.py` - тесты моделей
+- `services/forecast-service/tests/test_endpoints.py` - тесты эндпоинтов
+
+**Переменные окружения:**
+```bash
+OPENWEATHERMAP_API_KEY=your_api_key_here
 ```
 
 ## Frontend (Next.js 15, порт 3000) ✅
@@ -636,10 +696,12 @@ SMTP_FROM_EMAIL=your-email@yandex.ru
 SMTP_FROM_NAME=FishMap
 ENABLE_EMAIL_SENDING=false  # true для production
 EMAIL_CODE_EXPIRE_MINUTES=15
+EMAIL_SERVICE_API_KEY=your-secure-api-key-min-32-chars  # API Key для Email Service (SEC-005)
 
 # External Services
 MAPBOX_API_KEY=your-mapbox-api-key
 YANDEX_MAPS_API_KEY=dfb59053-0011-47fb-a6f1-a14efb9160d1
+OPENWEATHERMAP_API_KEY=your-openweathermap-api-key
 STRIPE_SECRET_KEY=your-stripe-secret-key
 STRIPE_PUBLISHABLE_KEY=your-stripe-publishable-key
 STRIPE_WEBHOOK_SECRET=your-stripe-webhook-secret
@@ -713,6 +775,7 @@ Reports Service: http://localhost:8003
 Booking Service: http://localhost:8004
 Shop Service: http://localhost:8005
 Email Service: http://localhost:8006
+Forecast Service: http://localhost:8007
 Kibana: http://localhost:5601
 Elasticsearch: http://localhost:9200
 PostgreSQL: localhost:5432

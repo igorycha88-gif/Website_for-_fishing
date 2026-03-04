@@ -11,6 +11,7 @@ class EmailVerificationResponse(BaseModel):
     message: str
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
+    csrf_token: Optional[str] = None
     token_type: str = "bearer"
     expires_in: int = 1800
 

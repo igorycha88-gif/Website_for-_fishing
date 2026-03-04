@@ -1,0 +1,11 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Python
+*.pyc
+__pycache__/
+
+# Node.js
+node_modules/

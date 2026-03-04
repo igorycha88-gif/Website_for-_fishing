@@ -3,13 +3,48 @@
 import { useAuthStore } from "@/app/stores/useAuthStore";
 import YandexMap from "@/components/YandexMap";
 import { MapPin } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Place } from "@/types/place";
 
 export default function MapPage() {
   const { isAuthenticated, user } = useAuthStore();
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const handleRegisterClick = () => {
     window.location.href = "/register";
   };
+
+  useEffect(() => {
+    const fetchPlaces = async () => {
+      try {
+        setLoading(true);
+        const endpoint = isAuthenticated ? "/api/v1/places" : "/api/v1/places?visibility=public";
+        
+        console.log('[MapPage] Fetching places:', { endpoint, isAuthenticated });
+        
+        const response = await fetch(endpoint, {
+          headers: isAuthenticated ? {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          } : {},
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[MapPage] Places loaded:', { count: data.places?.length || 0, total: data.total });
+          setPlaces(data.places || []);
+        } else {
+          console.error('[MapPage] Failed to fetch places:', response.status, response.statusText);
+        }
+      } catch (error) {
+        console.error('[MapPage] Failed to load places:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPlaces();
+  }, [isAuthenticated]);
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
@@ -24,15 +59,16 @@ export default function MapPage() {
               ? user?.city
                 ? `Карта мест для рыбалки в городе ${user.city}`
                 : "Укажите ваш город в настройках для персонализации карты"
-              : "Зарегистрируйтесь для просмотра публичных мест рыбалки"}
+              : "Исследуйте публичные места рыбалки на интерактивной карте"}
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden h-[600px]">
           <YandexMap
             city={isAuthenticated ? user?.city : null}
-            blurred={!isAuthenticated}
+            isAuthenticated={isAuthenticated}
             onRegisterClick={handleRegisterClick}
+            places={places}
           />
         </div>
 
@@ -54,7 +90,9 @@ export default function MapPage() {
           <div className="bg-white rounded-xl p-6 shadow-md">
             <h3 className="text-lg font-semibold text-primary-deepBlue mb-2">Персонализация</h3>
             <p className="text-gray-600 text-sm">
-              Укажите ваш город в настройках для точного отображения мест
+              {isAuthenticated
+                ? "Укажите ваш город в настройках для точного отображения мест"
+                : "Зарегистрируйтесь для доступа ко всем функциям"}
             </p>
           </div>
         </div>

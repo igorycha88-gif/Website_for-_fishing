@@ -99,6 +99,37 @@ async def get_current_user_id(
         )
 
 
+async def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(
+        HTTPBearer(auto_error=False)
+    ),
+) -> Optional[UUID]:
+    if not credentials:
+        return None
+
+    token = credentials.credentials
+
+    if not token:
+        return None
+
+    try:
+        import jwt
+        from app.core.config import settings
+
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        user_id_str = payload.get("sub")
+
+        if user_id_str is None:
+            return None
+
+        return UUID(user_id_str)
+
+    except (jwt.PyJWTError, Exception):
+        return None
+
+
 @router.post(
     "/places/my", response_model=PlaceResponse, status_code=status.HTTP_201_CREATED
 )
@@ -324,3 +355,145 @@ async def delete_place(
         )
 
     return None
+
+
+@router.get("/places", response_model=PlaceListResponse)
+async def get_public_places(
+    visibility: Optional[str] = None,
+    place_type: Optional[str] = None,
+    access_type: Optional[str] = None,
+    fish_type_id: Optional[UUID] = None,
+    seasonality: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+    sort: str = "created_at",
+    order: str = "desc",
+    db: AsyncSession = Depends(get_db),
+    redis_client=Depends(get_redis),
+    current_user_id: Optional[UUID] = Depends(get_current_user_optional),
+):
+    logger.info(
+        "GET /places",
+        service="places-service",
+        user_id=str(current_user_id) if current_user_id else "anonymous",
+        filters={
+            "visibility": visibility,
+            "place_type": place_type,
+            "access_type": access_type,
+            "fish_type_id": str(fish_type_id) if fish_type_id else None,
+            "seasonality": seasonality,
+            "search": search,
+        },
+        page=page,
+        page_size=page_size,
+    )
+
+    if visibility and visibility not in ["public", "private", "all"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="visibility must be one of: public, private, all",
+        )
+
+    skip = (page - 1) * page_size
+
+    if not current_user_id:
+        places = await crud_place.get_public_places(
+            db=db,
+            place_type=place_type,
+            access_type=access_type,
+            fish_type_id=fish_type_id,
+            seasonality=seasonality,
+            search=search,
+            skip=skip,
+            limit=page_size,
+            sort_by=sort,
+            order=order,
+        )
+        total = await crud_place.count_public_places(
+            db=db,
+            place_type=place_type,
+            access_type=access_type,
+            fish_type_id=fish_type_id,
+            seasonality=seasonality,
+            search=search,
+        )
+    else:
+        if visibility == "public":
+            places = await crud_place.get_public_places(
+                db=db,
+                place_type=place_type,
+                access_type=access_type,
+                fish_type_id=fish_type_id,
+                seasonality=seasonality,
+                search=search,
+                skip=skip,
+                limit=page_size,
+                sort_by=sort,
+                order=order,
+            )
+            total = await crud_place.count_public_places(
+                db=db,
+                place_type=place_type,
+                access_type=access_type,
+                fish_type_id=fish_type_id,
+                seasonality=seasonality,
+                search=search,
+            )
+        elif visibility == "private":
+            places = await crud_place.get_by_user(
+                db=db,
+                user_id=current_user_id,
+                visibility="private",
+                place_type=place_type,
+                access_type=access_type,
+                fish_type_id=fish_type_id,
+                seasonality=seasonality,
+                search=search,
+                skip=skip,
+                limit=page_size,
+                sort_by=sort,
+                order=order,
+            )
+            total = await crud_place.count_by_user(
+                db=db,
+                user_id=current_user_id,
+                visibility="private",
+                place_type=place_type,
+                access_type=access_type,
+                fish_type_id=fish_type_id,
+                seasonality=seasonality,
+                search=search,
+            )
+        else:
+            places = await crud_place.get_public_and_user_places(
+                db=db,
+                user_id=current_user_id,
+                place_type=place_type,
+                access_type=access_type,
+                fish_type_id=fish_type_id,
+                seasonality=seasonality,
+                search=search,
+                skip=skip,
+                limit=page_size,
+                sort_by=sort,
+                order=order,
+            )
+            total = await crud_place.count_public_and_user_places(
+                db=db,
+                user_id=current_user_id,
+                place_type=place_type,
+                access_type=access_type,
+                fish_type_id=fish_type_id,
+                seasonality=seasonality,
+                search=search,
+            )
+
+    enriched_places = []
+    for place in places:
+        enriched = await _enrich_place_with_fish_types(db, place)
+        enriched_places.append(PlaceResponse(**enriched))
+
+    return PlaceListResponse(
+        places=enriched_places, total=total, page=page, page_size=page_size
+    )

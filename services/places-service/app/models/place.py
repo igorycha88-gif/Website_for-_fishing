@@ -48,6 +48,4 @@ class Place(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now())
 
-    favorites = relationship(
-        "FavoritePlace", back_populates="place", cascade="all, delete-orphan"
-    )
+    favorites = relationship("FavoritePlace", back_populates="place")

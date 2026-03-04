@@ -92,6 +92,7 @@ Copy `.env.example` to `.env` and set the following variables:
 - `STRIPE_SECRET_KEY` - Stripe secret key
 - `STRIPE_PUBLISHABLE_KEY` - Stripe publishable key
 - `STRIPE_WEBHOOK_SECRET` - Stripe webhook secret
+- `CORS_ORIGINS` - Comma-separated list of allowed CORS origins (e.g., https://fishmap.ru,https://api.fishmap.ru)
 
 ## Troubleshooting
 
@@ -141,3 +142,70 @@ For production:
 4. Configure logging and monitoring
 5. Set up backup strategy
 6. Use dedicated database and redis servers
+
+## Secrets Management (HashiCorp Vault)
+
+### Development
+
+Vault runs automatically in dev mode:
+
+```bash
+# Start with Vault
+docker-compose -f docker-compose.dev.yml up -d
+
+# Check Vault status
+curl http://localhost:8200/v1/sys/health
+
+# View initialization logs
+docker logs $(docker ps -q -f name=vault-init)
+```
+
+### Production Setup
+
+1. **Disable dev mode** in docker-compose.yml:
+```yaml
+vault:
+  command: server  # Remove -dev flags
+```
+
+2. **Configure TLS**:
+```yaml
+vault:
+  environment:
+    VAULT_API_ADDR: https://vault.yourdomain.com:8200
+```
+
+3. **Initialize Vault**:
+```bash
+vault operator init -key-shares=5 -key-threshold=3
+# Save unseal keys securely!
+```
+
+4. **Unseal Vault**:
+```bash
+vault operator unseal <key1>
+vault operator unseal <key2>
+vault operator unseal <key3>
+```
+
+### Enable Vault for Services
+
+```bash
+# Set in .env
+USE_VAULT=true
+VAULT_ADDR=http://vault:8200
+
+# Get Role ID and Secret ID from vault-init logs
+AUTH_VAULT_ROLE_ID=<from-logs>
+AUTH_VAULT_SECRET_ID=<from-logs>
+```
+
+### Disable Vault (Fallback)
+
+```bash
+# In .env
+USE_VAULT=false
+# Services will use environment variables from .env
+```
+
+See [docs/SECRETS.md](docs/SECRETS.md) for complete documentation.

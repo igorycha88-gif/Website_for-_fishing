@@ -18,7 +18,9 @@ CREATE TABLE users (
     last_name VARCHAR(100),
     phone VARCHAR(20),
     avatar_url VARCHAR(500),
+    birth_date DATE,
     city VARCHAR(100),
+    bio TEXT,
     is_active BOOLEAN DEFAULT true,
     is_verified BOOLEAN DEFAULT false,
     role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('user', 'moderator', 'admin')),
@@ -50,6 +52,19 @@ CREATE TABLE email_verification_codes (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Password reset tokens table (Auth Service - SEC-008)
+CREATE TABLE password_reset_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(255) NOT NULL UNIQUE,
+    used BOOLEAN DEFAULT FALSE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    used_at TIMESTAMP,
+    ip_address VARCHAR(45),
+    user_agent TEXT
+);
+
 -- ============================================
 -- INDEXES
 -- ============================================
@@ -61,6 +76,9 @@ CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token);
 CREATE INDEX idx_refresh_tokens_jti ON refresh_tokens(jti);
 CREATE INDEX idx_email_verification_codes_email ON email_verification_codes(email);
 CREATE INDEX idx_email_verification_codes_expires_at ON email_verification_codes(expires_at);
+CREATE INDEX idx_password_reset_tokens_user ON password_reset_tokens(user_id);
+CREATE INDEX idx_password_reset_tokens_token_hash ON password_reset_tokens(token_hash);
+CREATE INDEX idx_password_reset_tokens_expires ON password_reset_tokens(expires_at) WHERE used = FALSE;
 
 -- ============================================
 -- PLACES SERVICE TABLES
@@ -196,6 +214,8 @@ CREATE TABLE fish_bite_settings (
     spawn_start_day INTEGER DEFAULT 1,
     spawn_end_day INTEGER DEFAULT 31,
     region_ids UUID[] DEFAULT '{}',
+    bait_recommendations JSONB DEFAULT '{}',
+    lure_recommendations JSONB DEFAULT '{}',
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );

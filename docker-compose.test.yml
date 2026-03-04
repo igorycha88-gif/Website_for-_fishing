@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: test_fishing_db
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d test_fishing_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  email-service:
+    build:
+      context: ./services/email-service
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://test_user:test_password@postgres:5432/test_fishing_db
+      REDIS_URL: redis://redis:6379/0
+      SMTP_HOST: smtp.example.com
+      SMTP_PORT: 587
+      SMTP_USER: test@example.com
+      SMTP_PASSWORD: test_password
+      SMTP_FROM_EMAIL: noreply@test.com
+      SMTP_FROM_NAME: TestEmailService
+      ENABLE_EMAIL_SENDING: false
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8007:8005"
+    command: ["python", "-m", "pytest", "tests/", "-v", "--cov=app"]

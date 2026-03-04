@@ -70,6 +70,63 @@ services:
           cpus: '0.1'
           memory: 64M
 
+  vault:
+    image: hashicorp/vault:1.15
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN_ID:-dev-root-token}
+      VAULT_ADDR: "http://0.0.0.0:8200"
+    cap_add:
+      - IPC_LOCK
+    networks:
+      - fishing-network
+    volumes:
+      - vault_data:/vault/data
+      - ./vault/policies:/vault/policies:ro
+      - ./vault/init.sh:/vault/init.sh:ro
+    command: server -dev -dev-root-token-id=${VAULT_DEV_ROOT_TOKEN_ID:-dev-root-token}
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  vault-init:
+    image: hashicorp/vault:1.15
+    networks:
+      - fishing-network
+    volumes:
+      - ./vault/policies:/vault/policies:ro
+      - ./vault/init.sh:/vault/init.sh:ro
+    environment:
+      VAULT_ADDR: "http://vault:8200"
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:-dev-root-token}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production-min-32-chars}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY:-}
+      MAPBOX_API_KEY: ${MAPBOX_API_KEY:-}
+    entrypoint: ["/bin/sh", "/vault/init.sh"]
+    depends_on:
+      vault:
+        condition: service_healthy
+    restart: "no"
+
   auth-service:
     build:
       context: ./services/auth-service
@@ -84,11 +141,17 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
       EMAIL_SERVICE_URL: http://email-service:8005
+      EMAIL_SERVICE_API_KEY: ${EMAIL_SERVICE_API_KEY}
       ENABLE_EMAIL_SENDING: ${ENABLE_EMAIL_SENDING:-false}
       EMAIL_CODE_EXPIRE_MINUTES: ${EMAIL_CODE_EXPIRE_MINUTES:-15}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
       SERVICE_NAME: ${SERVICE_NAME:-auth-service}
+      USE_VAULT: ${USE_VAULT:-false}
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_ROLE_ID: ${AUTH_VAULT_ROLE_ID:-}
+      VAULT_SECRET_ID: ${AUTH_VAULT_SECRET_ID:-}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
     networks:
       - fishing-network
     restart: unless-stopped
@@ -100,6 +163,8 @@ services:
         condition: service_healthy
       email-service:
         condition: service_started
+      vault:
+        condition: service_healthy
     deploy:
       resources: *backend-resources
 
@@ -116,11 +181,16 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-FishMap}
+      EMAIL_SERVICE_API_KEY: ${EMAIL_SERVICE_API_KEY}
       ENABLE_EMAIL_SENDING: ${ENABLE_EMAIL_SENDING:-false}
       EMAIL_CODE_EXPIRE_MINUTES: ${EMAIL_CODE_EXPIRE_MINUTES:-15}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
       SERVICE_NAME: ${SERVICE_NAME:-email-service}
+      USE_VAULT: ${USE_VAULT:-false}
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_ROLE_ID: ${EMAIL_VAULT_ROLE_ID:-}
+      VAULT_SECRET_ID: ${EMAIL_VAULT_SECRET_ID:-}
     networks:
       - fishing-network
     restart: unless-stopped
@@ -129,6 +199,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      vault:
         condition: service_healthy
     deploy:
       resources:
@@ -154,6 +226,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
       SERVICE_NAME: ${SERVICE_NAME:-places-service}
+      USE_VAULT: ${USE_VAULT:-false}
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_ROLE_ID: ${PLACES_VAULT_ROLE_ID:-}
+      VAULT_SECRET_ID: ${PLACES_VAULT_SECRET_ID:-}
     networks:
       - fishing-network
     restart: unless-stopped
@@ -162,6 +238,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      vault:
         condition: service_healthy
     deploy:
       resources: *backend-resources
@@ -181,6 +259,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
       SERVICE_NAME: ${SERVICE_NAME:-reports-service}
+      USE_VAULT: ${USE_VAULT:-false}
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_ROLE_ID: ${REPORTS_VAULT_ROLE_ID:-}
+      VAULT_SECRET_ID: ${REPORTS_VAULT_SECRET_ID:-}
     networks:
       - fishing-network
     restart: unless-stopped
@@ -189,6 +271,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      vault:
         condition: service_healthy
     deploy:
       resources: *backend-resources
@@ -207,6 +291,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
       SERVICE_NAME: ${SERVICE_NAME:-booking-service}
+      USE_VAULT: ${USE_VAULT:-false}
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_ROLE_ID: ${BOOKING_VAULT_ROLE_ID:-}
+      VAULT_SECRET_ID: ${BOOKING_VAULT_SECRET_ID:-}
     networks:
       - fishing-network
     restart: unless-stopped
@@ -215,6 +303,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      vault:
         condition: service_healthy
     deploy:
       resources: *backend-resources
@@ -233,6 +323,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
       SERVICE_NAME: ${SERVICE_NAME:-shop-service}
+      USE_VAULT: ${USE_VAULT:-false}
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_ROLE_ID: ${SHOP_VAULT_ROLE_ID:-}
+      VAULT_SECRET_ID: ${SHOP_VAULT_SECRET_ID:-}
     networks:
       - fishing-network
     restart: unless-stopped
@@ -241,6 +335,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      vault:
         condition: service_healthy
     deploy:
       resources: *backend-resources
@@ -258,6 +354,10 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOGSTASH_URL: ${LOGSTASH_URL:-http://logstash:5000}
       SERVICE_NAME: ${SERVICE_NAME:-forecast-service}
+      USE_VAULT: ${USE_VAULT:-false}
+      VAULT_ADDR: ${VAULT_ADDR:-http://vault:8200}
+      VAULT_ROLE_ID: ${FORECAST_VAULT_ROLE_ID:-}
+      VAULT_SECRET_ID: ${FORECAST_VAULT_SECRET_ID:-}
     networks:
       - fishing-network
     restart: unless-stopped
@@ -266,6 +366,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      vault:
         condition: service_healthy
     deploy:
       resources: *backend-resources
@@ -276,13 +378,13 @@ services:
       dockerfile: Dockerfile
       args:
         DOCKER_ENV: "true"
+        NEXT_PUBLIC_YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY}
+        NEXT_PUBLIC_API_URL: http://localhost:3000
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
     ports:
       - "3000:3000"
     environment:
       DOCKER_ENV: 'true'
-      NEXT_PUBLIC_API_URL: http://localhost:3000
-      NEXT_PUBLIC_YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY}
-      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
       AUTH_SERVICE_URL: http://auth-service:8000
       PLACES_SERVICE_URL: http://places-service:8001
       REPORTS_SERVICE_URL: http://reports-service:8002
@@ -318,3 +420,4 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  vault_data:

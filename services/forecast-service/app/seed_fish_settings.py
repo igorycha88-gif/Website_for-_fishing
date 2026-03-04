@@ -31,6 +31,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 1,
         "spawn_end_day": 30,
         "region_codes": [],
+        "bait_recommendations": {},
+        "lure_recommendations": {
+            "winter": ["блесна вертикальная", "балансир", "жерлица"],
+            "spring": ["воблер суспендер", "джиг", "колебалка"],
+            "summer": ["воблер", "силикон", "вертушка"],
+            "autumn": ["джиг крупный", "воблер глубинный", "блесна"],
+        },
     },
     {
         "fish_name": "Судак",
@@ -52,6 +59,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 10,
         "spawn_end_day": 20,
         "region_codes": [],
+        "bait_recommendations": {},
+        "lure_recommendations": {
+            "winter": [],
+            "spring": ["джиг", "твистер", "воблер"],
+            "summer": ["воблер", "джиг", "поролон"],
+            "autumn": ["джиг крупный", "воблер глубинный"],
+        },
     },
     {
         "fish_name": "Окунь",
@@ -73,6 +87,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 1,
         "spawn_end_day": 31,
         "region_codes": [],
+        "bait_recommendations": {},
+        "lure_recommendations": {
+            "winter": ["мормышка", "балансир", "блесна"],
+            "spring": ["джиг", "воблер", "вертушка"],
+            "summer": ["воблер", "силикон", "вертушка", "поппер"],
+            "autumn": ["джиг", "блесна", "воблер"],
+        },
     },
     {
         "fish_name": "Жерех",
@@ -94,6 +115,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 15,
         "spawn_end_day": 31,
         "region_codes": ["MOW", "MOS", "VOR", "VGG", "SAR", "SAM", "AST", "ROS", "KDA"],
+        "bait_recommendations": {},
+        "lure_recommendations": {
+            "winter": [],
+            "spring": ["кастмастер", "воблер", "вертушка"],
+            "summer": ["кастмастер", "поппер", "воблер"],
+            "autumn": ["кастмастер", "джиг", "воблер"],
+        },
     },
     {
         "fish_name": "Налим",
@@ -130,6 +158,13 @@ FISH_BITE_SETTINGS_DATA = [
             "NVS",
             "KYA",
         ],
+        "bait_recommendations": {
+            "winter": ["живец", "кусок рыбы", "червь", "креветка"],
+            "spring": ["живец", "червь"],
+            "summer": [],
+            "autumn": ["живец", "червь", "кусок рыбы"],
+        },
+        "lure_recommendations": {},
     },
     {
         "fish_name": "Голавль",
@@ -151,6 +186,18 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 20,
         "spawn_end_day": 31,
         "region_codes": [],
+        "bait_recommendations": {
+            "winter": [],
+            "spring": ["червь", "опарыш", "кузнечик"],
+            "summer": ["кузнечик", "жук", "вишня"],
+            "autumn": ["червь", "опарыш"],
+        },
+        "lure_recommendations": {
+            "winter": [],
+            "spring": ["воблер мини", "вертушка"],
+            "summer": ["воблер", "поппер", "вертушка"],
+            "autumn": ["воблер", "вертушка"],
+        },
     },
     {
         "fish_name": "Карп",
@@ -172,6 +219,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 15,
         "spawn_end_day": 15,
         "region_codes": [],
+        "bait_recommendations": {
+            "winter": ["мотыль", "тесто", "болтушка"],
+            "spring": ["червь", "опарыш", "перловка", "кукуруза"],
+            "summer": ["кукуруза", "горох", "бойлы", "пеллетс"],
+            "autumn": ["червь", "опарыш", "кукуруза", "бойлы"],
+        },
+        "lure_recommendations": {},
     },
     {
         "fish_name": "Лещ",
@@ -193,6 +247,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 15,
         "spawn_end_day": 31,
         "region_codes": [],
+        "bait_recommendations": {
+            "winter": ["мотыль", "опарыш", "мормыш"],
+            "spring": ["червь", "опарыш", "перловка"],
+            "summer": ["горох", "кукуруза", "перловка", "червь"],
+            "autumn": ["мотыль", "опарыш", "червь", "перловка"],
+        },
+        "lure_recommendations": {},
     },
     {
         "fish_name": "Карась",
@@ -214,6 +275,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 1,
         "spawn_end_day": 30,
         "region_codes": [],
+        "bait_recommendations": {
+            "winter": ["мотыль", "червь", "опарыш"],
+            "spring": ["червь", "опарыш", "перловка"],
+            "summer": ["червь", "хлеб", "тесто", "перловка"],
+            "autumn": ["червь", "опарыш", "мотыль"],
+        },
+        "lure_recommendations": {},
     },
     {
         "fish_name": "Плотва",
@@ -235,6 +303,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 1,
         "spawn_end_day": 20,
         "region_codes": [],
+        "bait_recommendations": {
+            "winter": ["мотыль", "опарыш"],
+            "spring": ["мотыль", "опарыш", "червь"],
+            "summer": ["перловка", "кукуруза", "опарыш"],
+            "autumn": ["мотыль", "опарыш", "червь"],
+        },
+        "lure_recommendations": {},
     },
     {
         "fish_name": "Язь",
@@ -256,6 +331,18 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 10,
         "spawn_end_day": 25,
         "region_codes": [],
+        "bait_recommendations": {
+            "winter": [],
+            "spring": ["червь", "опарыш", "личинка короеда"],
+            "summer": ["кузнечик", "вишня", "опарыш"],
+            "autumn": ["червь", "опарыш"],
+        },
+        "lure_recommendations": {
+            "winter": [],
+            "spring": ["воблер", "вертушка"],
+            "summer": ["воблер", "вертушка", "поппер"],
+            "autumn": ["воблер", "вертушка"],
+        },
     },
     {
         "fish_name": "Сазан",
@@ -277,6 +364,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 15,
         "spawn_end_day": 30,
         "region_codes": ["AST", "VGG", "ROS", "KDA", "SAR", "SAM"],
+        "bait_recommendations": {
+            "winter": [],
+            "spring": ["кукуруза", "горох", "червь"],
+            "summer": ["кукуруза", "бойлы", "пеллетс", "горох"],
+            "autumn": ["кукуруза", "бойлы", "червь"],
+        },
+        "lure_recommendations": {},
     },
     {
         "fish_name": "Амур",
@@ -298,6 +392,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 1,
         "spawn_end_day": 31,
         "region_codes": ["KDA", "AST", "ROS"],
+        "bait_recommendations": {
+            "winter": [],
+            "spring": ["кукуруза", "горох", "опарыш"],
+            "summer": ["кукуруза", "горох", "трава", "огурец"],
+            "autumn": ["кукуруза", "горох"],
+        },
+        "lure_recommendations": {},
     },
     {
         "fish_name": "Форель речная",
@@ -319,6 +420,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 1,
         "spawn_end_day": 30,
         "region_codes": ["KR", "MUR", "KO", "KB", "KC", "SE"],
+        "bait_recommendations": {},
+        "lure_recommendations": {
+            "winter": [],
+            "spring": ["воблер", "вертушка", "мормышка"],
+            "summer": ["воблер", "вертушка", "сухая муха"],
+            "autumn": ["воблер", "вертушка", "стример"],
+        },
     },
     {
         "fish_name": "Форель озерная",
@@ -340,6 +448,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 1,
         "spawn_end_day": 30,
         "region_codes": ["KR", "MUR", "KO"],
+        "bait_recommendations": {},
+        "lure_recommendations": {
+            "winter": [],
+            "spring": ["воблер", "вертушка", "джиг"],
+            "summer": ["воблер", "вертушка", "нахлыст"],
+            "autumn": ["воблер", "джиг", "стример"],
+        },
     },
     {
         "fish_name": "Хариус",
@@ -361,6 +476,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 1,
         "spawn_end_day": 30,
         "region_codes": ["KR", "KO", "MUR", "SVE", "PER", "KYA", "IRK", "KHM"],
+        "bait_recommendations": {},
+        "lure_recommendations": {
+            "winter": [],
+            "spring": ["мормышка", "вертушка", "сухая муха"],
+            "summer": ["сухая муха", "нимфа", "вертушка"],
+            "autumn": ["нимфа", "мормышка", "вертушка"],
+        },
     },
     {
         "fish_name": "Сом",
@@ -382,6 +504,18 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 15,
         "spawn_end_day": 30,
         "region_codes": ["AST", "VGG", "ROS", "KDA", "SAR", "SAM", "PRI", "KHA"],
+        "bait_recommendations": {
+            "winter": [],
+            "spring": ["живец", "лягушка", "червь"],
+            "summer": ["живец", "лягушка", "перепелка", "рак"],
+            "autumn": ["живец", "кусок рыбы"],
+        },
+        "lure_recommendations": {
+            "winter": [],
+            "spring": ["девон", "воблер крупный"],
+            "summer": ["воблер", "джеркбейт", "девон"],
+            "autumn": ["воблер крупный", "силикон"],
+        },
     },
     {
         "fish_name": "Лосось",
@@ -403,6 +537,13 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_start_day": 1,
         "spawn_end_day": 31,
         "region_codes": ["KR", "KO", "MUR", "ARK", "NEN", "PRI", "KHA", "KAM", "SAK"],
+        "bait_recommendations": {},
+        "lure_recommendations": {
+            "winter": [],
+            "spring": ["воблер", "вертушка", "муха"],
+            "summer": ["воблер", "вертушка", "муха"],
+            "autumn": ["воблер", "джиг", "вертушка"],
+        },
     },
     {
         "fish_name": "Таймень",
@@ -438,6 +579,13 @@ FISH_BITE_SETTINGS_DATA = [
             "YEV",
             "SA",
         ],
+        "bait_recommendations": {},
+        "lure_recommendations": {
+            "winter": [],
+            "spring": ["воблер крупный", "колебалка", "мышь"],
+            "summer": ["воблер", "вертушка крупная", "мышь"],
+            "autumn": ["воблер крупный", "колебалка", "джеркбейт"],
+        },
     },
 ]
 
@@ -498,6 +646,8 @@ async def seed_fish_bite_settings(db: AsyncSession) -> int:
             spawn_start_day=fish_data.get("spawn_start_day", 1),
             spawn_end_day=fish_data.get("spawn_end_day", 31),
             region_ids=region_ids,
+            bait_recommendations=fish_data.get("bait_recommendations", {}),
+            lure_recommendations=fish_data.get("lure_recommendations", {}),
         )
 
         db.add(settings)

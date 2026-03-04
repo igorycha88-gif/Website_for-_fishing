@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, Union
-from datetime import datetime
+from datetime import datetime, date
 import uuid
 
 
@@ -21,7 +21,9 @@ class UserResponse(BaseModel):
     last_name: Optional[str] = None
     phone: Optional[str] = None
     avatar_url: Optional[str] = None
+    birth_date: Optional[date] = None
     city: Optional[str] = None
+    bio: Optional[str] = None
     is_verified: bool
     role: Optional[str] = None
     created_at: datetime
@@ -42,9 +44,17 @@ class UserUpdate(BaseModel):
     last_name: Optional[str] = Field(None, max_length=100)
     phone: Optional[str] = Field(None, max_length=20)
     avatar_url: Optional[str] = Field(None, max_length=500)
-    city: Optional[str] = Field(
-        None, max_length=100, pattern="^[a-zA-Zа-яА-ЯёЁ0-9\\s\\-]+$"
-    )
+    birth_date: Optional[date] = None
+    city: Optional[str] = Field(None, max_length=100)
+    bio: Optional[str] = Field(None, max_length=2000)
+
+    @field_validator("first_name", "last_name", "phone", "city", "bio", mode="before")
+    @classmethod
+    def empty_string_to_none(cls, v: Optional[str]) -> Optional[str]:
+        """Convert empty strings to None to avoid DB constraint issues."""
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
 
 
 class PasswordUpdate(BaseModel):
@@ -66,6 +76,7 @@ class TokenResponse(BaseModel):
 class RefreshTokenResponse(BaseModel):
     access_token: str
     refresh_token: str
+    csrf_token: Optional[str] = None
     token_type: str = "bearer"
     expires_in: int = 1800
 

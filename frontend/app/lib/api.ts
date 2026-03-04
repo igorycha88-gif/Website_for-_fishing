@@ -11,6 +11,17 @@ export const API_ENDPOINTS = {
     ME: `${API_URL}/api/v1/users/me`,
     UPDATE_PASSWORD: `${API_URL}/api/v1/users/me/password`,
   },
+  MAPS: {
+    GEOCODE: `${API_URL}/api/v1/maps/geocode`,
+  },
+  PLACES: {
+    MY: `${API_URL}/api/v1/places/my`,
+    MY_BY_ID: (id: string) => `${API_URL}/api/v1/places/my/${id}`,
+    FISH_TYPES: `${API_URL}/api/v1/places/fish-types`,
+    EQUIPMENT_TYPES: `${API_URL}/api/v1/places/equipment-types`,
+    FAVORITES: `${API_URL}/api/v1/places/favorites`,
+    FAVORITE_BY_PLACE_ID: (placeId: string) => `${API_URL}/api/v1/places/favorites/${placeId}`,
+  },
 };
 
 export default API_URL;

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { MapPin, Plus, Filter, Search, Loader2, LogIn, Pencil, Trash2, X, Calendar, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react";
+import { MapPin, Plus, Filter, Search, Loader2, LogIn, Pencil, Trash2, X, Calendar, Eye, EyeOff, ChevronDown, ChevronUp, Fish } from "lucide-react";
 import YandexMap from "@/components/YandexMap";
 import AddPlaceForm from "@/components/AddPlaceForm";
 import EditPlaceForm from "@/components/EditPlaceForm";
@@ -33,6 +33,9 @@ export default function MyPlacesTab() {
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [showForecast, setShowForecast] = useState(true);
+  const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
+  const [showPlacesList, setShowPlacesList] = useState(true);
+  const [selectedPlaceForForecast, setSelectedPlaceForForecast] = useState<Place | null>(null);
 
   const loadPlaces = useCallback(async () => {
     if (!isAuthenticated || !token) {
@@ -55,6 +58,7 @@ export default function MyPlacesTab() {
   }, [getPlaces, filters, searchQuery, isAuthenticated, token]);
 
   useEffect(() => {
+    console.log("[MyPlacesTab] loadPlaces effect triggered", { isAuthenticated, hasToken: !!token });
     loadPlaces();
   }, [loadPlaces]);
 
@@ -315,106 +319,229 @@ export default function MyPlacesTab() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-2xl shadow-lg overflow-hidden h-[500px]">
-            {loadingPlaces ? (
-              <div className="h-full flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-primary-sea animate-spin" />
-              </div>
-            ) : (
-              <YandexMap
-                city={user?.city}
-                places={places}
-                onPlaceClick={handlePlaceClick}
-                onAddPlaceClick={handleMapClick}
-                tempMarker={showAddForm ? newPlaceCoordinates : null}
-              />
-            )}
+      <div className="bg-white rounded-2xl shadow-lg overflow-hidden h-[450px]">
+        {loadingPlaces ? (
+          <div className="h-full flex items-center justify-center">
+            <Loader2 className="w-8 h-8 text-primary-sea animate-spin" />
           </div>
-        </div>
+        ) : (
+          <YandexMap
+            city={user?.city}
+            places={places}
+            onPlaceClick={handlePlaceClick}
+            onAddPlaceClick={handleMapClick}
+            tempMarker={showAddForm ? newPlaceCoordinates : null}
+          />
+        )}
+      </div>
 
-        <div className="space-y-4">
+      <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+        <div 
+          className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
+          onClick={() => setShowPlacesList(!showPlacesList)}
+        >
           <h3 className="text-lg font-semibold text-primary-deepBlue">
             Мои места ({places.length})
           </h3>
+          <button className="p-1">
+            {showPlacesList ? (
+              <ChevronUp className="w-5 h-5 text-gray-500" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-gray-500" />
+            )}
+          </button>
+        </div>
 
-          {loadingPlaces ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 text-primary-sea animate-spin" />
-            </div>
-          ) : places.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 bg-gray-50 rounded-2xl">
-              <MapPin className="w-12 h-12 text-gray-300 mb-3" />
-              <p className="text-gray-500 text-center">
-                Нет сохраненных мест
-              </p>
-              <button
-                onClick={() => setShowAddForm(true)}
-                className="mt-3 text-primary-sea hover:underline text-sm"
-              >
-                Добавить первое место
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {places.map((place) => {
-                const getPlaceIcon = () => {
-                  const icons: Record<string, string> = {
-                    wild: "🌲",
-                    camping: "⛺",
-                    resort: "🏨",
+        {showPlacesList && (
+          <div className="p-4 pt-0">
+            {loadingPlaces ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 text-primary-sea animate-spin" />
+              </div>
+            ) : places.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 bg-gray-50 rounded-xl">
+                <MapPin className="w-12 h-12 text-gray-300 mb-3" />
+                <p className="text-gray-500 text-center">
+                  Нет сохраненных мест
+                </p>
+                <button
+                  onClick={() => setShowAddForm(true)}
+                  className="mt-3 text-primary-sea hover:underline text-sm"
+                >
+                  Добавить первое место
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {places.map((place) => {
+                  const getPlaceIcon = () => {
+                    const icons: Record<string, string> = {
+                      wild: "🌲",
+                      camping: "⛺",
+                      resort: "🏨",
+                    };
+                    return icons[place.place_type] || "📍";
                   };
-                  return icons[place.place_type] || "📍";
-                };
 
-                return (
-                  <motion.div
-                    key={place.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    onClick={() => handlePlaceClick(place)}
-                    className={`p-4 bg-white rounded-xl shadow cursor-pointer transition hover:shadow-md ${
-                      selectedPlace?.id === place.id ? "ring-2 ring-primary-sea" : ""
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {place.images && place.images.length > 0 ? (
-                        <img
-                          src={place.images[0]}
-                          alt={place.name}
-                          className="w-16 h-16 object-cover rounded-lg"
-                        />
-                      ) : (
-                        <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center text-2xl">
-                          {getPlaceIcon()}
+                  const isExpanded = expandedPlaceId === place.id;
+
+                  return (
+                    <motion.div
+                      key={place.id}
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-gray-50 rounded-xl overflow-hidden"
+                    >
+                      <div 
+                        className="p-3 flex items-center gap-3 cursor-pointer hover:bg-gray-100 transition"
+                        onClick={() => setExpandedPlaceId(isExpanded ? null : place.id)}
+                      >
+                        {place.images && place.images.length > 0 ? (
+                          <img
+                            src={place.images[0]}
+                            alt={place.name}
+                            className="w-14 h-14 object-cover rounded-lg flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-14 h-14 bg-gray-200 rounded-lg flex items-center justify-center text-2xl flex-shrink-0">
+                            {getPlaceIcon()}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-gray-900 truncate">{place.name}</h4>
+                          <p className="text-sm text-gray-500 truncate">{place.address}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600">
+                              {place.place_type === "wild" && "Дикое"}
+                              {place.place_type === "camping" && "Кэмпинг"}
+                              {place.place_type === "resort" && "База"}
+                            </span>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              place.visibility === "private"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-green-100 text-green-700"
+                            }`}>
+                              {place.visibility === "private" ? "Личное" : "Публичное"}
+                            </span>
+                            {place.access_type && (
+                              <span className="text-xs text-gray-400">
+                                {place.access_type === "car" && "🚗"}
+                                {place.access_type === "boat" && "🚤"}
+                                {place.access_type === "foot" && "🚶"}
+                              </span>
+                            )}
+                            {place.fish_types && place.fish_types.length > 0 && (
+                              <div className="flex items-center gap-1">
+                                {place.fish_types.slice(0, 3).map((fish, i) => (
+                                  <span key={i} className="text-sm">
+                                    {fish.icon || "🐟"}
+                                  </span>
+                                ))}
+                                {place.fish_types.length > 3 && (
+                                  <span className="text-xs text-gray-400">
+                                    +{place.fish_types.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-gray-900 truncate">{place.name}</h4>
-                        <p className="text-sm text-gray-500 truncate">{place.address}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={`text-xs px-2 py-0.5 rounded ${
-                            place.visibility === "private"
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-green-100 text-green-700"
-                          }`}>
-                            {place.visibility === "private" ? "Личное" : "Публичное"}
-                          </span>
-                          <span className="text-xs text-gray-400">
-                            {place.place_type === "wild" && "Дикое"}
-                            {place.place_type === "camping" && "Кэмпинг"}
-                            {place.place_type === "resort" && "База"}
-                          </span>
+                        <div className="flex-shrink-0">
+                          {isExpanded ? (
+                            <ChevronUp className="w-5 h-5 text-gray-400" />
+                          ) : (
+                            <ChevronDown className="w-5 h-5 text-gray-400" />
+                          )}
                         </div>
                       </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          className="border-t border-gray-200 p-3"
+                        >
+                          {place.description && (
+                            <p className="text-sm text-gray-600 mb-3">{place.description}</p>
+                          )}
+                          
+                          {place.seasonality && place.seasonality.length > 0 && (
+                            <div className="flex items-center gap-2 mb-2 text-sm text-gray-500">
+                              <Calendar className="w-4 h-4" />
+                              <span>Сезонность: {place.seasonality.map(getSeasonalityLabel).join(", ")}</span>
+                            </div>
+                          )}
+                          
+                          <div className="text-sm text-gray-500 mb-3">
+                            <span className="font-medium">Координаты: </span>
+                            {Number(place.latitude).toFixed(6)}, {Number(place.longitude).toFixed(6)}
+                          </div>
+
+                          {place.images && place.images.length > 1 && (
+                            <div className="flex gap-2 mb-3 overflow-x-auto">
+                              {place.images.slice(1).map((img, idx) => (
+                                <img
+                                  key={idx}
+                                  src={img}
+                                  alt={`${place.name} ${idx + 2}`}
+                                  className="w-16 h-16 object-cover rounded-lg flex-shrink-0"
+                                />
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePlaceClick(place);
+                              }}
+                              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-primary-sea text-white rounded-lg text-sm font-medium hover:bg-primary-sea/90 transition"
+                            >
+                              <MapPin className="w-4 h-4" />
+                              Показать на карте
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedPlaceForForecast(place);
+                                setShowForecast(true);
+                              }}
+                              className="flex items-center justify-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition"
+                              title="Показать прогноз клева"
+                            >
+                              <Fish className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedPlace(place);
+                                setShowEditForm(true);
+                              }}
+                              className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedPlace(place);
+                                setShowDeleteConfirm(true);
+                              }}
+                              className="flex items-center justify-center gap-2 px-3 py-2 bg-red-100 text-red-700 rounded-lg text-sm font-medium hover:bg-red-200 transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {showForecast && (
@@ -423,8 +550,27 @@ export default function MyPlacesTab() {
           animate={{ opacity: 1, y: 0 }}
           className="mt-6"
         >
+          {selectedPlaceForForecast && (
+            <div className="mb-4 flex items-center justify-between bg-blue-50 px-4 py-3 rounded-xl">
+              <div className="flex items-center gap-2">
+                <Fish className="w-5 h-5 text-blue-600" />
+                <span className="font-medium text-blue-900">
+                  Прогноз для места: <strong>{selectedPlaceForForecast.name}</strong>
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedPlaceForForecast(null)}
+                className="text-blue-600 hover:text-blue-800 transition"
+                title="Сбросить и показать выбор региона"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          )}
           <FishingForecast 
             showRegionSelector={true}
+            latitude={selectedPlaceForForecast ? Number(selectedPlaceForForecast.latitude) : undefined}
+            longitude={selectedPlaceForForecast ? Number(selectedPlaceForForecast.longitude) : undefined}
           />
         </motion.div>
       )}
@@ -628,6 +774,17 @@ export default function MyPlacesTab() {
               </div>
 
               <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => {
+                    setSelectedPlaceForForecast(selectedPlace);
+                    setSelectedPlace(null);
+                    setShowForecast(true);
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-100 text-green-700 rounded-lg font-medium hover:bg-green-200 transition"
+                >
+                  <Fish className="w-4 h-4" />
+                  Прогноз клева
+                </button>
                 <button
                   onClick={() => {
                     console.log("[MyPlacesTab] Bottom Edit button clicked");

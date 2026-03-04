@@ -1,0 +1,315 @@
+"use client";
+
+import { useState } from "react";
+import { MapPin, Plus, Filter, Search, Heart, Edit, Trash2, Grid, List } from "lucide-react";
+import YandexMap from "@/components/YandexMap";
+import AddPlaceForm from "@/components/AddPlaceForm";
+import { getPlaces, getFavorites, toggleFavorite, removeFavorite, deletePlace, Place, PlaceFilters, getFishTypes } from "@/lib/placesApi";
+import { useAuthStore } from "@/app/stores/useAuthStore";
+
+type ViewMode = "map" | "list";
+
+export default function MyPlacesTab() {
+  const { user } = useAuthStore();
+  
+  const [viewMode, setViewMode] = useState<ViewMode>("map");
+  const [places, setPlaces] = useState<Place[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [showFilters, setShowFilters] = useState(true);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [error, setError] = useState("");
+  const [filters, setFilters] = useState<PlaceFilters>({
+    visibility: "all",
+    page: 1,
+    page_size: 20,
+  });
+
+  const fetchPlaces = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await getPlaces(filters);
+      setPlaces(response.places);
+    } catch (err: any) {
+      console.error("Failed to fetch places:", err);
+      setError("Не удалось загрузить места");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchFavorites = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await getFavorites();
+      setFavorites(response.places.map((p: Place) => p.id));
+    } catch (err: any) {
+      console.error("Failed to fetch favorites:", err);
+    setError("Не удалось загрузить избранное");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPlaces();
+  }, [filters.visibility, filters.place_type, filters.access_type, filters.fish_type_id, filters.seasonality, filters.search, filters.page]);
+
+  const handlePlaceClick = (place: Place) => {
+    setSelectedPlace(place);
+  };
+
+  const handleAddPlaceClick = (coordinates: { lat: number; lon: number }) => {
+    setShowAddForm(true);
+  };
+
+  const handleSavePlace = async (placeData: any) => {
+    try {
+      const newPlace = await createPlace(placeData);
+      await fetchPlaces();
+      setShowAddForm(false);
+      setError("");
+    } catch (err: any) {
+      console.error("Failed to save place:", err);
+      setError(err.message || "Не удалось сохранить место");
+    }
+  };
+
+  const handleFavoriteToggle = async (placeId: string) => {
+    try {
+      if (isFavorite) {
+        await removeFavorite(placeId);
+        setFavorites(favorites.filter((id) => id !== placeId));
+      } else {
+        await toggleFavorite(placeId);
+        setFavorites([...favorites, placeId]);
+      }
+      await fetchPlaces();
+    } catch (err: any) {
+      console.error("Failed to toggle favorite:", err);
+      setError(err.message || "Не удалось добавить в избранное");
+    }
+  };
+
+  const handleDeletePlace = async (placeId: string) => {
+    if (!confirm("Вы уверены, что хотите удалить это место?")) {
+      return;
+    }
+
+    try {
+      await deletePlace(placeId);
+      setPlaces(places.filter((p) => p.id !== placeId));
+      setSelectedPlace(null);
+      setError("");
+    } catch (err: any) {
+      console.error("Failed to delete place:", err);
+      setError(err.message || "Не удалось удалить место");
+    }
+  };
+
+  const handleFiltersChange = (newFilters: Partial<PlaceFilters>) => {
+    setFilters({ ...filters, ...newFilters, page: 1 });
+  };
+
+  return (
+    <div
+      className="space-y-6"
+    >
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold text-primary-deepBlue flex items-center gap-3">
+          <MapPin className="w-7 h-7 text-primary-sea" />
+          Мои места рыбалки
+        </h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`p-2 rounded-lg transition-colors ${
+              showFilters ? "bg-primary-sea text-white" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            }`}
+          >
+            <Filter className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="p-2 bg-primary-sea text-white rounded-lg hover:bg-primary-sea/90 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
+
+      {viewMode === "map" ? (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <YandexMap
+              city={user?.city}
+              places={places}
+              onPlaceClick={handlePlaceClick}
+              onAddPlaceClick={handleAddPlaceClick}
+              filters={filters}
+              showFilters={showFilters}
+              onFiltersChange={handleFiltersChange}
+              onFavoriteClick={handleFavoriteToggle}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div className="p-4 border-b border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Список мест ({places.length})</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setViewMode("map")}
+                    className="p-2 rounded-lg transition-colors hover:bg-gray-100"
+                  >
+                    <Grid className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Поиск по названию..."
+                  value={filters.search || ""}
+                  onChange={(e) => handleFiltersChange({ search: e.target.value })}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-sea focus:border-transparent"
+                />
+              </div>
+
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="inline-block w-8 h-8 border-4 border-primary-sea border-t-transparent rounded-full animate-spin mb-2"></div>
+                  <p className="text-gray-600">Загрузка...</p>
+                </div>
+              ) : places.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <p>У вас пока нет добавленных мест</p>
+                  <button
+                    onClick={() => setShowAddForm(true)}
+                    className="text-primary-sea hover:underline"
+                  >
+                    Добавить первое место
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {places.map((place) => (
+                    <div
+                      key={place.id}
+                      className="bg-gray-50 rounded-lg p-4 hover:shadow-md transition-shadow"
+                    >
+                      <div className="flex items-start gap-4">
+                        {place.images && place.images.length > 0 && (
+                          <img
+                            src={place.images[0]}
+                            alt={place.name}
+                            className="w-24 h-24 object-cover rounded-lg"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-semibold text-gray-900">{place.name}</h4>
+                            <div className="flex items-center gap-2">
+                              {place.visibility === "private" ? (
+                                <span className="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded">
+                                  Личное
+                                </span>
+                              ) : (
+                                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                                  Публичное
+                                </span>
+                              )}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleFavoriteToggle(place.id, !favorites.includes(place.id));
+                                }}
+                                className={`p-1 rounded-lg transition-colors ${
+                                  favorites.includes(place.id)
+                                    ? "text-red-500 bg-red-50 hover:bg-red-100"
+                                    : "text-gray-500 hover:text-red-600 hover:bg-red-50"
+                                }`}
+                                disabled={loading}
+                              >
+                                <Heart
+                                  className={`w-4 h-4 ${favorites.includes(place.id) ? "fill-current" : ""}`}
+                                />
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-600 line-clamp-2">
+                            {place.description || place.address}
+                          </p>
+                          <div className="flex flex items-center gap-4 text-sm text-gray-500 mt-2">
+                            <span>{place.place_type === "wild" && "🌲 Дикое место"}</span>
+                            <span>•</span>
+                            <span>{place.access_type === "car" && "🚗 На машине"}</span>
+                            <span>•</span>
+                            {place.fish_types && place.fish_types.length > 0 && (
+                              <span>
+                                {place.fish_types.slice(0, 2).map(f => f.icon || "🐟").join(" ")}
+                                {place.fish_types.length > 3 && ` + еще ${place.fish_types.length - 3}`}
+                              </span>
+                            )}
+                          </div>
+                          {place.rating_avg && place.visibility === "public" && (
+                            <div className="flex items-center gap-1 mt-2">
+                              <span className="text-yellow-500">★</span>
+                              <span className="font-semibold">{place.rating_avg}</span>
+                            </div>
+                          )}
+                          <div className="flex gap-2 mt-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFavoriteClick(place);
+                              }}
+                              className="p-2 text-primary-sea hover:underline text-sm"
+                              disabled={loading}
+                            >
+                              Подробнее
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeletePlace(place.id);
+                              }}
+                              className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+                              disabled={loading}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddForm && (
+        <AddPlaceForm
+          onCancel={() => setShowAddForm(false)}
+          initialCoordinates={undefined}
+          onSave={handleSavePlace}
+        />
+      )}
+    </div>
+  );
+}

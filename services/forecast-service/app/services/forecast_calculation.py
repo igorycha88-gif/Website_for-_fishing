@@ -489,3 +489,20 @@ def get_best_depth(fish_name: str, season: str) -> str:
     }
 
     return depths.get(fish_name, {}).get(season, "2-4 м")
+
+
+def get_seasonal_recommendations(
+    fish_settings: dict, season: str, category: str
+) -> tuple[list[str] | None, list[str] | None]:
+    bait_recs = fish_settings.get("bait_recommendations", {}) if fish_settings else {}
+    lure_recs = fish_settings.get("lure_recommendations", {}) if fish_settings else {}
+
+    baits = bait_recs.get(season, []) if bait_recs else []
+    lures = lure_recs.get(season, []) if lure_recs else []
+
+    if category in ("peaceful", "commercial"):
+        return baits if baits else None, None
+    elif category in ("predatory", "sport"):
+        return None, lures if lures else None
+
+    return None, None

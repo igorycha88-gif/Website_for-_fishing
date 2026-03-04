@@ -151,34 +151,48 @@ allow_credentials=True,
 
 ---
 
-#### 8. Password reset token не инвалидируется
+#### 8. Password reset token не инвалидируется ⏳ (Требования согласованы: SEC-008)
 **Файл:** `services/auth-service/app/endpoints/auth.py:277-314`  
-**Описание:** Токен сброса пароля можно использовать повторно до истечения (1 час).
+**Описание:** ~~Токен сброса пароля можно использовать повторно до истечения (1 час).~~
 
-**Риск:** Если ссылка перехвачена, attacker может сбросить пароль даже после первого использования.
+**Риск:** ~~Если ссылка перехвачена, attacker может сбросить пароль даже после первого использования.~~
 
-**Рекомендации:**
-- Хранить использованные reset tokens в БД с флагом used
-- Инвалидировать токен после первого использования
-- Удалять токен при смене пароля
+**Статус:** ⏳ Требования согласованы (2026-03-03)
+**Реализация:** `требования/SEC-008_Password_Reset_Token_Invalidation.md`
+- Database-based tokens (таблица `password_reset_tokens`)
+- 64-char криптографический токен (bcrypt хеширование)
+- Guaranteed invalidation после использования (флаг `used`)
+- Максимум 1 активный токен на пользователя
+- Email уведомление после успешного сброса пароля
+- IP logging (ip_address, user_agent) для audit trail
+- Frontend страница `/reset-password`
 
----
-
-#### 9. Отсутствие CSRF защиты
-**Описание:** Нет CSRF токенов для state-changing операций.
-
-**Риск:** Злоумышленник может выполнить действие от имени авторизованного пользователя.
-
-**Рекомендации:**
-- Реализовать CSRF токены для всех POST/PUT/DELETE запросов
-- Использовать SameSite cookie attribute
-- Проверять Origin/Referer headers
+**Рекомендации:** ~~Хранить использованные reset tokens в БД с флагом used...~~ (согласовано, awaiting implementation)
 
 ---
 
-#### 10. Middleware прокидывает все заголовки
+#### 9. Отсутствие CSRF защиты ⏳ (Требования согласованы: SEC-009)
+**Описание:** ~~Нет CSRF токенов для state-changing операций.~~
+
+**Риск:** ~~Злоумышленник может выполнить действие от имени авторизованного пользователя.~~
+
+**Статус:** ⏳ Требования согласованы (2026-03-03)
+**Реализация:** `требования/SEC-009_CSRF_Protection.md`
+- Synchronizer Token Pattern + Redis Storage
+- CSRF токен в ответе /login, /verify-email, /refresh
+- X-CSRF-Token header для всех POST/PUT/DELETE/PATCH запросов
+- Redis key: `csrf:{user_id}` с TTL 24 часа
+- CSRF Middleware для валидации токенов
+- Инвалидация при logout и смене пароля
+- Frontend: автоматическое добавление X-CSRF-Token header
+
+**Рекомендации:** ~~Реализовать CSRF токены...~~ (согласовано, awaiting implementation)
+
+---
+
+#### 10. Middleware прокидывает все заголовки ⏳ (Требования согласованы: SEC-010)
 **Файл:** `frontend/middleware.ts:23-27`  
-**Описание:** Проксирование всех headers без фильтрации.
+**Описание:** ~~Проксирование всех headers без фильтрации.~~
 
 ```typescript
 request.headers.forEach((value, key) => {
@@ -188,12 +202,20 @@ request.headers.forEach((value, key) => {
 });
 ```
 
-**Риск:** HTTP Request Smuggling, Header Injection.
+**Риск:** ~~HTTP Request Smuggling, Header Injection.~~
 
-**Рекомендации:**
-- Явно указать whitelist разрешенных headers
-- Фильтровать X-Forwarded-* headers
-- Валидировать значения headers
+**Статус:** ⏳ Требования согласованы (2026-03-03)
+**Реализация:** `требования/SEC-010_Middleware_Header_Filtering.md`
+- Whitelist подход к фильтрации заголовков
+- CRLF injection validation (защита от `\r`, `\n`)
+- Middleware генерирует X-Forwarded-For/Proto/Host (игнорирует от клиента)
+- Distributed tracing поддержка (x-request-id, x-correlation-id)
+- Security logging заблокированных заголовков (dev/staging)
+- Конфигурируемый whitelist через PROXY_ALLOWED_HEADERS env
+- Unit + Integration тесты
+- Документация security practices
+
+**Рекомендации:** ~~Явно указать whitelist разрешенных headers...~~ (согласовано, awaiting implementation)
 
 ---
 
@@ -287,8 +309,9 @@ request.headers.forEach((value, key) => {
 
 ### Фаза 2 (в течение недели)
 5. Улучшить валидацию паролей
-6. Инвалидация password reset tokens
-7. Добавить CSRF защиту
+6. Инвалидация password reset tokens ⏳ (Требования согласованы: SEC-008)
+7. Добавить CSRF защиту ⏳ (Требования согласованы: SEC-009)
+8. Middleware header filtering ⏳ (Требования согласованы: SEC-010)
 
 ### Фаза 3 (в течение месяца)
 8. Настроить security headers
