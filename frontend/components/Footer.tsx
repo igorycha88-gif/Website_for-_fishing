@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { MapPin, Fish, ShoppingBag, Home, Mail, Phone, Facebook, Instagram, Twitter } from "lucide-react";
+// SHOP-HIDE: ShoppingBag — скрыто до появления юр. лица
 
 export function Footer() {
   return (
@@ -14,7 +15,9 @@ export function Footer() {
               <span className="text-2xl font-bold">Рыбалка</span>
             </div>
             <p className="text-white/60 text-sm">
-              Найди лучшие места для рыбалки. Интерактивная карта, прогноз клёва, магазин снастей и базы отдыха.
+              {/* SHOP-HIDE: скрыто до появления юр. лица */}
+              Найди лучшие места для рыбалки. Интерактивная карта и прогноз клёва.
+              {/* Найди лучшие места для рыбалки. Интерактивная карта, прогноз клёва, магазин снастей и базы отдыха. */}
             </p>
           </div>
 
@@ -39,12 +42,14 @@ export function Footer() {
                   Прогноз клёва
                 </Link>
               </li>
+              {/* SHOP-HIDE: скрыто до появления юр. лица
               <li>
                 <Link href="/shop" className="hover:text-primary-sea transition-colors flex items-center gap-2">
                   <ShoppingBag className="w-4 h-4" />
                   Магазин
                 </Link>
               </li>
+              */}
             </ul>
           </div>
 

@@ -9,7 +9,9 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "Рыбалка - Найди лучшие места для рыбалки",
-  description: "Интерактивная карта мест для рыбалки, прогноз клёва, магазин снастей и базы отдыха",
+  description: "Интерактивная карта мест для рыбалки и прогноз клёва",
+  // SHOP-HIDE: скрыто до появления юр. лица — старое описание:
+  // description: "Интерактивная карта мест для рыбалки, прогноз клёва, магазин снастей и базы отдыха",
 };
 
 export default function RootLayout({

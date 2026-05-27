@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { Search, MapPin, ShoppingCart, Calendar, Fish, Menu, X, Bell, LogIn, UserPlus, User, ChevronDown, LogOut } from "lucide-react";
+// SHOP-HIDE: ShoppingCart — скрыто до появления юр. лица
 import { useAuthStore, logoutApi } from "@/app/stores/useAuthStore";
 import { API_ENDPOINTS } from "@/app/lib/api";
 
@@ -16,9 +17,10 @@ export function Header() {
     { label: "Главная", href: "/" },
     { label: "Карта", href: "/map" },
     { label: "Прогноз", href: "/forecast" },
-    { label: "Магазин", href: "/shop" },
-    { label: "Базы отдыха", href: "/resorts" },
-    { label: "Магазины", href: "/stores" },
+    // SHOP-HIDE: скрыто до появления юр. лица
+    // { label: "Магазин", href: "/shop" },
+    // { label: "Базы отдыха", href: "/resorts" },
+    // { label: "Магазины", href: "/stores" },
   ];
 
   useEffect(() => {
@@ -95,6 +97,7 @@ export function Header() {
                   <span className="absolute top-1 right-1 w-2 h-2 bg-accent-orange rounded-full" />
                 </motion.button>
 
+                {/* SHOP-HIDE: скрыто до появления юр. лица — иконка корзины
                 <motion.button
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -105,6 +108,7 @@ export function Header() {
                   <ShoppingCart className="w-5 h-5" />
                   <span className="absolute -top-1 -right-1 w-5 h-5 bg-accent-orange text-white text-xs rounded-full flex items-center justify-center">0</span>
                 </motion.button>
+                */}
 
                 <div className="relative">
                   <motion.button

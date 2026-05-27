@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Hero } from "@/components/Hero";
 import { MapPin, ShoppingBag, TrendingUp, Calendar, Star, Phone, Mail } from "lucide-react";
+// SHOP-HIDE: ShoppingBag, Calendar — скрыто до появления юр. лица
 
 export default function Home() {
   return (
@@ -27,7 +28,7 @@ export default function Home() {
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">
             {[
               {
                 icon: MapPin,
@@ -39,16 +40,17 @@ export default function Home() {
                 title: "Прогноз клёва",
                 description: "Точные прогнозы на основе метеоданных и фаз луны",
               },
-              {
-                icon: ShoppingBag,
-                title: "Магазин снастей",
-                description: "Широкий ассортимент товаров для любого вида рыбалки",
-              },
-              {
-                icon: Calendar,
-                title: "Базы отдыха",
-                description: "Бронирование мест в лучших рыболовных базах",
-              },
+              // SHOP-HIDE: скрыто до появления юр. лица
+              // {
+              //   icon: ShoppingBag,
+              //   title: "Магазин снастей",
+              //   description: "Широкий ассортимент товаров для любого вида рыбалки",
+              // },
+              // {
+              //   icon: Calendar,
+              //   title: "Базы отдыха",
+              //   description: "Бронирование мест в лучших рыболовных базах",
+              // },
             ].map((feature, index) => (
               <motion.div
                 key={feature.title}
