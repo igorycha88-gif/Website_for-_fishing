@@ -45,6 +45,7 @@ class Region(Base):
     latitude = Column(Numeric(10, 8), nullable=False)
     longitude = Column(Numeric(11, 8), nullable=False)
     timezone = Column(String(50), nullable=False, default="Europe/Moscow")
+    climate_zone = Column(String(10), default="central")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
 
@@ -119,6 +120,7 @@ class FishBiteSettings(Base):
     spawn_end_month = Column(Integer, nullable=True)
     spawn_start_day = Column(Integer, default=1)
     spawn_end_day = Column(Integer, default=31)
+    spawn_periods_by_zone = Column(JSONB, default={})
     region_ids = Column(ARRAY(PG_UUID(as_uuid=True)), default=[])
     bait_recommendations = Column(JSONB, default={})
     lure_recommendations = Column(JSONB, default={})

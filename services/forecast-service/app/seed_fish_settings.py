@@ -30,6 +30,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 4,
         "spawn_start_day": 1,
         "spawn_end_day": 30,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 2, "spawn_end_month": 3, "spawn_start_day": 15, "spawn_end_day": 25},
+            "central": {"spawn_start_month": 3, "spawn_end_month": 4, "spawn_start_day": 1, "spawn_end_day": 20},
+            "north": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 1, "spawn_end_day": 31},
+        },
         "region_codes": [],
         "bait_recommendations": {},
         "lure_recommendations": {
@@ -58,6 +63,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 5,
         "spawn_start_day": 10,
         "spawn_end_day": 20,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 3, "spawn_end_month": 4, "spawn_start_day": 1, "spawn_end_day": 15},
+            "central": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 10, "spawn_end_day": 20},
+            "north": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 1, "spawn_end_day": 15},
+        },
         "region_codes": [],
         "bait_recommendations": {},
         "lure_recommendations": {
@@ -86,6 +96,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 5,
         "spawn_start_day": 1,
         "spawn_end_day": 31,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 3, "spawn_end_month": 4, "spawn_start_day": 15, "spawn_end_day": 20},
+            "central": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 1, "spawn_end_day": 20},
+            "north": {"spawn_start_month": 4, "spawn_end_month": 6, "spawn_start_day": 25, "spawn_end_day": 15},
+        },
         "region_codes": [],
         "bait_recommendations": {},
         "lure_recommendations": {
@@ -114,6 +129,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 5,
         "spawn_start_day": 15,
         "spawn_end_day": 31,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 3, "spawn_end_month": 4, "spawn_start_day": 20, "spawn_end_day": 20},
+            "central": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 15, "spawn_end_day": 25},
+            "north": {"spawn_start_month": 5, "spawn_end_month": 5, "spawn_start_day": 1, "spawn_end_day": 31},
+        },
         "region_codes": ["MOW", "MOS", "VOR", "VGG", "SAR", "SAM", "AST", "ROS", "KDA"],
         "bait_recommendations": {},
         "lure_recommendations": {
@@ -142,21 +162,14 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 2,
         "spawn_start_day": 15,
         "spawn_end_day": 28,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 11, "spawn_end_month": 12, "spawn_start_day": 15, "spawn_end_day": 31},
+            "central": {"spawn_start_month": 12, "spawn_end_month": 2, "spawn_start_day": 1, "spawn_end_day": 15},
+            "north": {"spawn_start_month": 12, "spawn_end_month": 2, "spawn_start_day": 15, "spawn_end_day": 28},
+        },
         "region_codes": [
-            "KR",
-            "KO",
-            "MUR",
-            "ARK",
-            "VLG",
-            "NEN",
-            "SVE",
-            "KHM",
-            "YAN",
-            "KIR",
-            "PER",
-            "TOM",
-            "NVS",
-            "KYA",
+            "KR", "KO", "MUR", "ARK", "VLG", "NEN", "SVE",
+            "KHM", "YAN", "KIR", "PER", "TOM", "NVS", "KYA",
         ],
         "bait_recommendations": {
             "winter": ["живец", "кусок рыбы", "червь", "креветка"],
@@ -185,6 +198,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 5,
         "spawn_start_day": 20,
         "spawn_end_day": 31,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 4, "spawn_end_month": 4, "spawn_start_day": 1, "spawn_end_day": 25},
+            "central": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 20, "spawn_end_day": 25},
+            "north": {"spawn_start_month": 5, "spawn_end_month": 5, "spawn_start_day": 5, "spawn_end_day": 31},
+        },
         "region_codes": [],
         "bait_recommendations": {
             "winter": [],
@@ -218,6 +236,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 6,
         "spawn_start_day": 15,
         "spawn_end_day": 15,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 5, "spawn_end_month": 5, "spawn_start_day": 1, "spawn_end_day": 31},
+            "central": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 15, "spawn_end_day": 20},
+            "north": {"spawn_start_month": 6, "spawn_end_month": 7, "spawn_start_day": 1, "spawn_end_day": 15},
+        },
         "region_codes": [],
         "bait_recommendations": {
             "winter": ["мотыль", "тесто", "болтушка"],
@@ -246,6 +269,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 5,
         "spawn_start_day": 15,
         "spawn_end_day": 31,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 4, "spawn_end_month": 4, "spawn_start_day": 1, "spawn_end_day": 25},
+            "central": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 15, "spawn_end_day": 25},
+            "north": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 1, "spawn_end_day": 15},
+        },
         "region_codes": [],
         "bait_recommendations": {
             "winter": ["мотыль", "опарыш", "мормыш"],
@@ -274,6 +302,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 6,
         "spawn_start_day": 1,
         "spawn_end_day": 30,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 25, "spawn_end_day": 31},
+            "central": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 10, "spawn_end_day": 20},
+            "north": {"spawn_start_month": 6, "spawn_end_month": 7, "spawn_start_day": 1, "spawn_end_day": 15},
+        },
         "region_codes": [],
         "bait_recommendations": {
             "winter": ["мотыль", "червь", "опарыш"],
@@ -302,6 +335,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 5,
         "spawn_start_day": 1,
         "spawn_end_day": 20,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 3, "spawn_end_month": 4, "spawn_start_day": 10, "spawn_end_day": 10},
+            "central": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 1, "spawn_end_day": 20},
+            "north": {"spawn_start_month": 4, "spawn_end_month": 6, "spawn_start_day": 20, "spawn_end_day": 10},
+        },
         "region_codes": [],
         "bait_recommendations": {
             "winter": ["мотыль", "опарыш"],
@@ -330,6 +368,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 5,
         "spawn_start_day": 10,
         "spawn_end_day": 25,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 3, "spawn_end_month": 4, "spawn_start_day": 20, "spawn_end_day": 15},
+            "central": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 10, "spawn_end_day": 25},
+            "north": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 1, "spawn_end_day": 10},
+        },
         "region_codes": [],
         "bait_recommendations": {
             "winter": [],
@@ -363,6 +406,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 6,
         "spawn_start_day": 15,
         "spawn_end_day": 30,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 4, "spawn_end_month": 6, "spawn_start_day": 25, "spawn_end_day": 5},
+            "central": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 15, "spawn_end_day": 25},
+            "north": {"spawn_start_month": 6, "spawn_end_month": 7, "spawn_start_day": 1, "spawn_end_day": 15},
+        },
         "region_codes": ["AST", "VGG", "ROS", "KDA", "SAR", "SAM"],
         "bait_recommendations": {
             "winter": [],
@@ -391,6 +439,10 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 7,
         "spawn_start_day": 1,
         "spawn_end_day": 31,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 5, "spawn_end_month": 7, "spawn_start_day": 1, "spawn_end_day": 31},
+            "central": {"spawn_start_month": 6, "spawn_end_month": 7, "spawn_start_day": 1, "spawn_end_day": 31},
+        },
         "region_codes": ["KDA", "AST", "ROS"],
         "bait_recommendations": {
             "winter": [],
@@ -419,6 +471,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 11,
         "spawn_start_day": 1,
         "spawn_end_day": 30,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 10, "spawn_end_month": 11, "spawn_start_day": 1, "spawn_end_day": 15},
+            "central": {"spawn_start_month": 10, "spawn_end_month": 11, "spawn_start_day": 15, "spawn_end_day": 30},
+            "north": {"spawn_start_month": 10, "spawn_end_month": 11, "spawn_start_day": 1, "spawn_end_day": 30},
+        },
         "region_codes": ["KR", "MUR", "KO", "KB", "KC", "SE"],
         "bait_recommendations": {},
         "lure_recommendations": {
@@ -447,6 +504,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 11,
         "spawn_start_day": 1,
         "spawn_end_day": 30,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 10, "spawn_end_month": 11, "spawn_start_day": 1, "spawn_end_day": 15},
+            "central": {"spawn_start_month": 10, "spawn_end_month": 11, "spawn_start_day": 15, "spawn_end_day": 30},
+            "north": {"spawn_start_month": 10, "spawn_end_month": 11, "spawn_start_day": 1, "spawn_end_day": 30},
+        },
         "region_codes": ["KR", "MUR", "KO"],
         "bait_recommendations": {},
         "lure_recommendations": {
@@ -475,6 +537,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 6,
         "spawn_start_day": 1,
         "spawn_end_day": 30,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 5, "spawn_end_month": 5, "spawn_start_day": 1, "spawn_end_day": 31},
+            "central": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 15, "spawn_end_day": 20},
+            "north": {"spawn_start_month": 6, "spawn_end_month": 7, "spawn_start_day": 1, "spawn_end_day": 15},
+        },
         "region_codes": ["KR", "KO", "MUR", "SVE", "PER", "KYA", "IRK", "KHM"],
         "bait_recommendations": {},
         "lure_recommendations": {
@@ -503,6 +570,11 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": 6,
         "spawn_start_day": 15,
         "spawn_end_day": 30,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 1, "spawn_end_day": 10},
+            "central": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 20, "spawn_end_day": 25},
+            "north": {"spawn_start_month": 6, "spawn_end_month": 7, "spawn_start_day": 1, "spawn_end_day": 15},
+        },
         "region_codes": ["AST", "VGG", "ROS", "KDA", "SAR", "SAM", "PRI", "KHA"],
         "bait_recommendations": {
             "winter": [],
@@ -536,6 +608,7 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": None,
         "spawn_start_day": 1,
         "spawn_end_day": 31,
+        "spawn_periods_by_zone": {},
         "region_codes": ["KR", "KO", "MUR", "ARK", "NEN", "PRI", "KHA", "KAM", "SAK"],
         "bait_recommendations": {},
         "lure_recommendations": {
@@ -564,20 +637,10 @@ FISH_BITE_SETTINGS_DATA = [
         "spawn_end_month": None,
         "spawn_start_day": 1,
         "spawn_end_day": 31,
+        "spawn_periods_by_zone": {},
         "region_codes": [
-            "KYA",
-            "IRK",
-            "BU",
-            "ZAB",
-            "TOM",
-            "NVS",
-            "KEM",
-            "ALT",
-            "PRI",
-            "KHA",
-            "AMU",
-            "YEV",
-            "SA",
+            "KYA", "IRK", "BU", "ZAB", "TOM", "NVS", "KEM", "ALT",
+            "PRI", "KHA", "AMU", "YEV", "SA",
         ],
         "bait_recommendations": {},
         "lure_recommendations": {
@@ -645,6 +708,7 @@ async def seed_fish_bite_settings(db: AsyncSession) -> int:
             spawn_end_month=fish_data.get("spawn_end_month"),
             spawn_start_day=fish_data.get("spawn_start_day", 1),
             spawn_end_day=fish_data.get("spawn_end_day", 31),
+            spawn_periods_by_zone=fish_data.get("spawn_periods_by_zone", {}),
             region_ids=region_ids,
             bait_recommendations=fish_data.get("bait_recommendations", {}),
             lure_recommendations=fish_data.get("lure_recommendations", {}),

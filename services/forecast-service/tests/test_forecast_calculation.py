@@ -24,6 +24,9 @@ from app.services.forecast_calculation import (
     get_best_baits,
     get_best_depth,
     get_seasonal_recommendations,
+    get_climate_zone,
+    get_spawn_dates_for_zone,
+    REGION_CODE_TO_ZONE,
     WINTER_MONTHLY_MULTIPLIERS,
 )
 
@@ -1283,3 +1286,302 @@ class TestGenerateRecommendationV3:
         )
         rec = generate_recommendation(80, weather, fish_settings)
         assert "Полнолуние" in rec
+
+
+class TestGetClimateZone:
+    def test_south_zone(self):
+        assert get_climate_zone("KDA") == "south"
+        assert get_climate_zone("AST") == "south"
+        assert get_climate_zone("ROS") == "south"
+        assert get_climate_zone("VGG") == "south"
+
+    def test_central_zone(self):
+        assert get_climate_zone("MOW") == "central"
+        assert get_climate_zone("MOS") == "central"
+        assert get_climate_zone("VLG") == "central"
+
+    def test_north_zone(self):
+        assert get_climate_zone("KR") == "north"
+        assert get_climate_zone("KO") == "north"
+        assert get_climate_zone("MUR") == "north"
+        assert get_climate_zone("KYA") == "north"
+        assert get_climate_zone("KAM") == "north"
+
+    def test_unknown_code_returns_central(self):
+        assert get_climate_zone("UNKNOWN") == "central"
+
+    def test_all_codes_mapped(self):
+        assert len(REGION_CODE_TO_ZONE) > 0
+        for code, zone in REGION_CODE_TO_ZONE.items():
+            assert zone in ("south", "central", "north"), f"Invalid zone for {code}: {zone}"
+
+
+class TestGetSpawnDatesForZone:
+    @pytest.fixture
+    def pike_zones(self):
+        return {
+            "south": {"spawn_start_month": 2, "spawn_end_month": 3, "spawn_start_day": 15, "spawn_end_day": 25},
+            "central": {"spawn_start_month": 3, "spawn_end_month": 4, "spawn_start_day": 1, "spawn_end_day": 20},
+            "north": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 1, "spawn_end_day": 31},
+        }
+
+    def test_south_zone(self, pike_zones):
+        result = get_spawn_dates_for_zone(pike_zones, "south")
+        assert result == (2, 3, 15, 25)
+
+    def test_central_zone(self, pike_zones):
+        result = get_spawn_dates_for_zone(pike_zones, "central")
+        assert result == (3, 4, 1, 20)
+
+    def test_north_zone(self, pike_zones):
+        result = get_spawn_dates_for_zone(pike_zones, "north")
+        assert result == (4, 5, 1, 31)
+
+    def test_unknown_zone_returns_none(self, pike_zones):
+        result = get_spawn_dates_for_zone(pike_zones, "east")
+        assert result is None
+
+    def test_none_input_returns_none(self):
+        result = get_spawn_dates_for_zone(None, "central")
+        assert result is None
+
+    def test_empty_dict_returns_none(self):
+        result = get_spawn_dates_for_zone({}, "central")
+        assert result is None
+
+
+class TestIsInSpawnPeriodZoned:
+    def test_pike_south_february_in_spawn(self):
+        south_pike = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Щука",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.4"),
+            active_in_winter=True,
+            spawn_start_month=2,
+            spawn_end_month=3,
+            spawn_start_day=15,
+            spawn_end_day=25,
+        )
+        is_spawn, msg = is_in_spawn_period(south_pike, date(2026, 2, 20))
+        assert is_spawn is True
+
+    def test_pike_south_march_10_in_spawn(self):
+        south_pike = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Щука",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.4"),
+            active_in_winter=True,
+            spawn_start_month=2,
+            spawn_end_month=3,
+            spawn_start_day=15,
+            spawn_end_day=25,
+        )
+        is_spawn, msg = is_in_spawn_period(south_pike, date(2026, 3, 10))
+        assert is_spawn is True
+
+    def test_pike_south_march_30_not_spawn(self):
+        south_pike = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Щука",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.4"),
+            active_in_winter=True,
+            spawn_start_month=2,
+            spawn_end_month=3,
+            spawn_start_day=15,
+            spawn_end_day=25,
+        )
+        is_spawn, _ = is_in_spawn_period(south_pike, date(2026, 3, 30))
+        assert is_spawn is False
+
+    def test_pike_north_april_in_spawn(self):
+        north_pike = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Щука",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.4"),
+            active_in_winter=True,
+            spawn_start_month=4,
+            spawn_end_month=5,
+            spawn_start_day=1,
+            spawn_end_day=31,
+        )
+        is_spawn, msg = is_in_spawn_period(north_pike, date(2026, 4, 15))
+        assert is_spawn is True
+
+    def test_pike_north_march_not_spawn(self):
+        north_pike = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Щука",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.4"),
+            active_in_winter=True,
+            spawn_start_month=4,
+            spawn_end_month=5,
+            spawn_start_day=1,
+            spawn_end_day=31,
+        )
+        is_spawn, _ = is_in_spawn_period(north_pike, date(2026, 3, 15))
+        assert is_spawn is False
+
+    def test_nalim_south_november_in_spawn(self):
+        south_nalim = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Налим",
+            optimal_temp_min=Decimal("-2"),
+            optimal_temp_max=Decimal("12"),
+            optimal_pressure_min=750,
+            optimal_pressure_max=760,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=False,
+            prefer_evening=False,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.7"),
+            active_in_winter=True,
+            spawn_start_month=11,
+            spawn_end_month=12,
+            spawn_start_day=15,
+            spawn_end_day=31,
+        )
+        is_spawn, msg = is_in_spawn_period(south_nalim, date(2026, 11, 20))
+        assert is_spawn is True
+
+    def test_spawn_message_contains_zone_dates(self):
+        zone_fish = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Щука",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.4"),
+            active_in_winter=True,
+            spawn_start_month=4,
+            spawn_end_month=5,
+            spawn_start_day=1,
+            spawn_end_day=31,
+        )
+        _, msg = is_in_spawn_period(zone_fish, date(2026, 4, 15))
+        assert "1 апреля" in msg
+        assert "31 мая" in msg
+
+
+class TestIsInSpawnPeriodYearBoundaryDays:
+    @pytest.fixture
+    def nalim_central(self):
+        return FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Налим",
+            optimal_temp_min=Decimal("-2"),
+            optimal_temp_max=Decimal("12"),
+            optimal_pressure_min=750,
+            optimal_pressure_max=760,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=False,
+            prefer_evening=False,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.7"),
+            active_in_winter=True,
+            spawn_start_month=12,
+            spawn_end_month=2,
+            spawn_start_day=1,
+            spawn_end_day=15,
+        )
+
+    def test_year_boundary_dec_1_is_spawn(self, nalim_central):
+        is_spawn, _ = is_in_spawn_period(nalim_central, date(2026, 12, 1))
+        assert is_spawn is True
+
+    def test_year_boundary_nov_30_not_spawn(self, nalim_central):
+        is_spawn, _ = is_in_spawn_period(nalim_central, date(2026, 11, 30))
+        assert is_spawn is False
+
+    def test_year_boundary_feb_15_is_spawn(self, nalim_central):
+        is_spawn, _ = is_in_spawn_period(nalim_central, date(2026, 2, 15))
+        assert is_spawn is True
+
+    def test_year_boundary_feb_16_not_spawn(self, nalim_central):
+        is_spawn, _ = is_in_spawn_period(nalim_central, date(2026, 2, 16))
+        assert is_spawn is False
+
+    def test_year_boundary_jan_mid_is_spawn(self, nalim_central):
+        is_spawn, _ = is_in_spawn_period(nalim_central, date(2026, 1, 15))
+        assert is_spawn is True
+
+    def test_year_boundary_dec_31_is_spawn(self, nalim_central):
+        is_spawn, _ = is_in_spawn_period(nalim_central, date(2026, 12, 31))
+        assert is_spawn is True
+
+    @pytest.fixture
+    def nalim_south(self):
+        return FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Налим",
+            optimal_temp_min=Decimal("-2"),
+            optimal_temp_max=Decimal("12"),
+            optimal_pressure_min=750,
+            optimal_pressure_max=760,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=False,
+            prefer_evening=False,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.7"),
+            active_in_winter=True,
+            spawn_start_month=11,
+            spawn_end_month=12,
+            spawn_start_day=15,
+            spawn_end_day=31,
+        )
+
+    def test_nalim_south_nov_14_not_spawn(self, nalim_south):
+        is_spawn, _ = is_in_spawn_period(nalim_south, date(2026, 11, 14))
+        assert is_spawn is False
+
+    def test_nalim_south_nov_15_is_spawn(self, nalim_south):
+        is_spawn, _ = is_in_spawn_period(nalim_south, date(2026, 11, 15))
+        assert is_spawn is True
+
+    def test_nalim_south_dec_31_is_spawn(self, nalim_south):
+        is_spawn, _ = is_in_spawn_period(nalim_south, date(2026, 12, 31))
+        assert is_spawn is True

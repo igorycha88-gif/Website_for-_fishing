@@ -161,6 +161,7 @@ CREATE TABLE regions (
     latitude NUMERIC(10, 8) NOT NULL,
     longitude NUMERIC(11, 8) NOT NULL,
     timezone VARCHAR(50) NOT NULL DEFAULT 'Europe/Moscow',
+    climate_zone VARCHAR(10) DEFAULT 'central',
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -213,6 +214,7 @@ CREATE TABLE fish_bite_settings (
     spawn_end_month INTEGER,
     spawn_start_day INTEGER DEFAULT 1,
     spawn_end_day INTEGER DEFAULT 31,
+    spawn_periods_by_zone JSONB DEFAULT '{}',
     region_ids UUID[] DEFAULT '{}',
     bait_recommendations JSONB DEFAULT '{}',
     lure_recommendations JSONB DEFAULT '{}',

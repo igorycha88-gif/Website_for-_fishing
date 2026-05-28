@@ -38,6 +38,8 @@ from app.services.forecast_calculation import (
     get_best_depth,
     get_seasonal_recommendations,
     calculate_pressure_trend,
+    get_climate_zone,
+    get_spawn_dates_for_zone,
     FishSettings,
     WeatherConditions,
     get_season,
@@ -53,7 +55,39 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/forecast", tags=["forecast"])
 
 CACHE_TTL = 3600
-ALGORITHM_VERSION = "v3"
+ALGORITHM_VERSION = "v4"
+
+
+def _build_fish_settings(fish_settings, climate_zone: str) -> FishSettings:
+    zone_spawn = get_spawn_dates_for_zone(
+        fish_settings.spawn_periods_by_zone, climate_zone
+    )
+    if zone_spawn:
+        spawn_start_month, spawn_end_month, spawn_start_day, spawn_end_day = zone_spawn
+    else:
+        spawn_start_month = fish_settings.spawn_start_month
+        spawn_end_month = fish_settings.spawn_end_month
+        spawn_start_day = fish_settings.spawn_start_day or 1
+        spawn_end_day = fish_settings.spawn_end_day or 31
+
+    return FishSettings(
+        fish_type_id=fish_settings.fish_type_id,
+        fish_name="",
+        optimal_temp_min=fish_settings.optimal_temp_min,
+        optimal_temp_max=fish_settings.optimal_temp_max,
+        optimal_pressure_min=fish_settings.optimal_pressure_min,
+        optimal_pressure_max=fish_settings.optimal_pressure_max,
+        max_wind_speed=fish_settings.max_wind_speed,
+        prefer_morning=fish_settings.prefer_morning,
+        prefer_evening=fish_settings.prefer_evening,
+        prefer_overcast=fish_settings.prefer_overcast,
+        moon_sensitivity=fish_settings.moon_sensitivity,
+        active_in_winter=fish_settings.active_in_winter,
+        spawn_start_month=spawn_start_month,
+        spawn_end_month=spawn_end_month,
+        spawn_start_day=spawn_start_day,
+        spawn_end_day=spawn_end_day,
+    )
 
 
 async def _get_user_id_from_token(
@@ -139,6 +173,8 @@ async def get_forecast(
 
     if not region:
         raise HTTPException(status_code=404, detail="Region not found")
+
+    climate_zone = get_climate_zone(region.code)
 
     cached = await _get_cached_forecast(redis, region_id, forecast_date)
     if cached:
@@ -302,24 +338,7 @@ async def get_forecast(
                         list(hour_ranges[tod]),
                     )
 
-                    fish_settings_obj = FishSettings(
-                        fish_type_id=fish_settings.fish_type_id,
-                        fish_name="",
-                        optimal_temp_min=fish_settings.optimal_temp_min,
-                        optimal_temp_max=fish_settings.optimal_temp_max,
-                        optimal_pressure_min=fish_settings.optimal_pressure_min,
-                        optimal_pressure_max=fish_settings.optimal_pressure_max,
-                        max_wind_speed=fish_settings.max_wind_speed,
-                        prefer_morning=fish_settings.prefer_morning,
-                        prefer_evening=fish_settings.prefer_evening,
-                        prefer_overcast=fish_settings.prefer_overcast,
-                        moon_sensitivity=fish_settings.moon_sensitivity,
-                        active_in_winter=fish_settings.active_in_winter,
-                        spawn_start_month=fish_settings.spawn_start_month,
-                        spawn_end_month=fish_settings.spawn_end_month,
-                        spawn_start_day=fish_settings.spawn_start_day or 1,
-                        spawn_end_day=fish_settings.spawn_end_day or 31,
-                    )
+                    fish_settings_obj = _build_fish_settings(fish_settings, climate_zone)
 
                     hour = list(hour_ranges[tod])[0]
                     calc_result = calculate_bite_score(
@@ -471,24 +490,7 @@ async def get_forecast(
                         list(hour_ranges[tod]),
                     )
 
-                    fish_settings_obj = FishSettings(
-                        fish_type_id=custom_settings.fish_type_id,
-                        fish_name="",
-                        optimal_temp_min=custom_settings.optimal_temp_min,
-                        optimal_temp_max=custom_settings.optimal_temp_max,
-                        optimal_pressure_min=custom_settings.optimal_pressure_min,
-                        optimal_pressure_max=custom_settings.optimal_pressure_max,
-                        max_wind_speed=custom_settings.max_wind_speed,
-                        prefer_morning=custom_settings.prefer_morning,
-                        prefer_evening=custom_settings.prefer_evening,
-                        prefer_overcast=custom_settings.prefer_overcast,
-                        moon_sensitivity=custom_settings.moon_sensitivity,
-                        active_in_winter=custom_settings.active_in_winter,
-                        spawn_start_month=custom_settings.spawn_start_month,
-                        spawn_end_month=custom_settings.spawn_end_month,
-                        spawn_start_day=custom_settings.spawn_start_day or 1,
-                        spawn_end_day=custom_settings.spawn_end_day or 31,
-                    )
+                    fish_settings_obj = _build_fish_settings(custom_settings, climate_zone)
 
                     hour = list(hour_ranges[tod])[0]
                     calc_result = calculate_bite_score(

@@ -88,6 +88,44 @@ MONTH_NAMES = {
     12: "декабря",
 }
 
+REGION_CODE_TO_ZONE = {
+    "KDA": "south", "AST": "south", "ROS": "south", "VOR": "south",
+    "VGG": "south", "SAR": "south", "SAM": "south",
+    "KB": "south", "KC": "south", "SE": "south",
+    "PRI": "south", "KHA": "south",
+    "MOW": "central", "MOS": "central", "VLG": "central", "KIR": "central",
+    "KR": "north", "KO": "north", "MUR": "north", "ARK": "north",
+    "NEN": "north", "SVE": "north", "KHM": "north", "YAN": "north",
+    "PER": "north", "TOM": "north", "NVS": "north", "KYA": "north",
+    "IRK": "north", "KEM": "north", "ALT": "north", "BU": "north",
+    "ZAB": "north", "AMU": "north", "YEV": "north", "SA": "north",
+    "KAM": "north", "SAK": "north",
+}
+
+
+def get_climate_zone(region_code: str) -> str:
+    return REGION_CODE_TO_ZONE.get(region_code, "central")
+
+
+def get_spawn_dates_for_zone(
+    spawn_periods_by_zone: Optional[dict],
+    zone: str,
+) -> Optional[Tuple[int, int, int, int]]:
+    if not spawn_periods_by_zone:
+        return None
+    zone_data = spawn_periods_by_zone.get(zone)
+    if not zone_data:
+        return None
+    try:
+        return (
+            zone_data["spawn_start_month"],
+            zone_data["spawn_end_month"],
+            zone_data.get("spawn_start_day", 1),
+            zone_data.get("spawn_end_day", 31),
+        )
+    except (KeyError, TypeError):
+        return None
+
 
 def get_time_of_day(hour: int) -> TimeOfDay:
     if 6 <= hour < 10:
@@ -366,7 +404,12 @@ def is_in_spawn_period(fish: FishSettings, check_date: date) -> Tuple[bool, str]
                 or (start_month < month < end_month)
             )
     else:
-        is_spawn = (month >= start_month) or (month <= end_month)
+        is_spawn = (
+            (start_month == month and day >= fish.spawn_start_day)
+            or (end_month == month and day <= fish.spawn_end_day)
+            or (month > start_month)
+            or (month < end_month)
+        )
 
     if is_spawn:
         message = f"Нерестовый период ({fish.spawn_start_day} {MONTH_NAMES[start_month]} - {fish.spawn_end_day} {MONTH_NAMES[end_month]}) — вылов запрещен"
