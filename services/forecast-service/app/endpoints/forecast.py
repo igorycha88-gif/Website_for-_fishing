@@ -1,12 +1,12 @@
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional, List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func
+from sqlalchemy import select
 from redis.asyncio import Redis
 
 from app.core.database import get_db, redis_client
@@ -29,6 +29,7 @@ from app.schemas.forecast import (
     MultiDayForecastItem,
     AvailableDatesResponse,
     DaySummaryResponse,
+    SolunarPeriodSchema,
 )
 from app.services.forecast_calculation import (
     calculate_bite_score,
@@ -36,14 +37,23 @@ from app.services.forecast_calculation import (
     get_best_baits,
     get_best_depth,
     get_seasonal_recommendations,
+    calculate_pressure_trend,
     FishSettings,
     WeatherConditions,
+    get_season,
+)
+from app.services.moon_calculation import (
+    calculate_moon_phase,
+    calculate_solunar_periods,
+    get_solunar_periods_for_hour,
+    is_time_in_solunar_period,
 )
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/forecast", tags=["forecast"])
 
 CACHE_TTL = 3600
+ALGORITHM_VERSION = "v3"
 
 
 async def _get_user_id_from_token(
@@ -70,21 +80,10 @@ async def _get_user_id_from_token(
     return None
 
 
-def _get_season(month: int) -> str:
-    if month in [3, 4, 5]:
-        return "spring"
-    elif month in [6, 7, 8]:
-        return "summer"
-    elif month in [9, 10, 11]:
-        return "autumn"
-    else:
-        return "winter"
-
-
 async def _get_cached_forecast(
     redis: Redis, region_id: UUID, forecast_date: date
 ) -> Optional[dict]:
-    cache_key = f"forecast:{region_id}:{forecast_date}"
+    cache_key = f"forecast:{ALGORITHM_VERSION}:{region_id}:{forecast_date}"
     try:
         cached = await redis.get(cache_key)
         if cached:
@@ -101,7 +100,7 @@ async def _get_cached_forecast(
 async def _set_cached_forecast(
     redis: Redis, region_id: UUID, forecast_date: date, data: dict
 ) -> None:
-    cache_key = f"forecast:{region_id}:{forecast_date}"
+    cache_key = f"forecast:{ALGORITHM_VERSION}:{region_id}:{forecast_date}"
     try:
         await redis.setex(cache_key, CACHE_TTL, json.dumps(data, default=str))
     except Exception as e:
@@ -168,6 +167,43 @@ async def get_forecast(
             detail=f"No weather data available for {forecast_date}",
         )
 
+    lat = float(region.latitude)
+    lon = float(region.longitude)
+
+    moon_data = None
+    solunar_data = None
+    try:
+        moon_data = calculate_moon_phase(forecast_date, lat, lon)
+        solunar_data = calculate_solunar_periods(forecast_date, lat, lon)
+    except Exception as e:
+        logger.warning(
+            f"Failed to calculate moon/solunar data: {e}",
+            service="forecast-service",
+            region_id=str(region_id),
+        )
+
+    yesterday_result = await db.execute(
+        select(WeatherData)
+        .where(
+            WeatherData.region_id == region_id,
+            WeatherData.forecast_date == forecast_date - timedelta(days=1),
+        )
+        .order_by(WeatherData.forecast_hour)
+    )
+    yesterday_records = yesterday_result.scalars().all()
+
+    all_pressure_records = []
+    for w in yesterday_records:
+        if w.pressure_hpa is not None:
+            all_pressure_records.append((w.forecast_hour, w.pressure_hpa))
+    for w in weather_records:
+        if w.pressure_hpa is not None:
+            all_pressure_records.append((w.forecast_hour + 24, w.pressure_hpa))
+
+    pressure_trend_data = None
+    if len(all_pressure_records) >= 2:
+        pressure_trend_data = calculate_pressure_trend(all_pressure_records)
+
     settings_query = select(FishBiteSettings).options()
     if fish_type_id:
         settings_query = settings_query.where(
@@ -181,7 +217,19 @@ async def get_forecast(
     fish_types_map = {ft.id: ft for ft in fish_types_result.scalars().all()}
 
     month = forecast_date.month
-    season = _get_season(month)
+    season = get_season(month)
+
+    solunar_schemas = []
+    if solunar_data:
+        for p in solunar_data.major_periods + solunar_data.minor_periods:
+            solunar_schemas.append(
+                SolunarPeriodSchema(
+                    start=p.start.strftime("%H:%M"),
+                    end=p.end.strftime("%H:%M"),
+                    period_type=p.period_type,
+                    strength=round(p.strength, 2),
+                )
+            )
 
     fish_forecasts = []
 
@@ -228,6 +276,10 @@ async def get_forecast(
                         recommended_baits=baits,
                         recommended_lures=lures,
                         current_season=season,
+                        solunar_periods=solunar_schemas if solunar_schemas else None,
+                        pressure_trend_direction=pressure_trend_data.direction if pressure_trend_data else None,
+                        pressure_stability=round(pressure_trend_data.stability, 2) if pressure_trend_data else None,
+                        is_solunar_peak=False,
                     )
                 )
             else:
@@ -243,7 +295,12 @@ async def get_forecast(
                 ]
 
                 if relevant_weather:
-                    avg_weather = _get_average_weather(relevant_weather)
+                    avg_weather = _get_average_weather(
+                        relevant_weather,
+                        pressure_trend_data,
+                        solunar_data,
+                        list(hour_ranges[tod]),
+                    )
 
                     fish_settings_obj = FishSettings(
                         fish_type_id=fish_settings.fish_type_id,
@@ -287,6 +344,18 @@ async def get_forecast(
                         fish_settings_dict, season, category or ""
                     )
 
+                    tod_solunar = []
+                    if solunar_data:
+                        tod_solunar = [
+                            SolunarPeriodSchema(
+                                start=p.start.strftime("%H:%M"),
+                                end=p.end.strftime("%H:%M"),
+                                period_type=p.period_type,
+                                strength=round(p.strength, 2),
+                            )
+                            for p in get_solunar_periods_for_hour(solunar_data, hour)
+                        ]
+
                     time_forecasts.append(
                         TimeOfDayForecast(
                             time_of_day=tod,
@@ -306,6 +375,10 @@ async def get_forecast(
                             recommended_baits=baits,
                             recommended_lures=lures,
                             current_season=season,
+                            solunar_periods=tod_solunar if tod_solunar else None,
+                            pressure_trend_direction=pressure_trend_data.direction if pressure_trend_data else None,
+                            pressure_stability=round(pressure_trend_data.stability, 2) if pressure_trend_data else None,
+                            is_solunar_peak=avg_weather.is_solunar_major or avg_weather.is_solunar_minor,
                         )
                     )
 
@@ -391,7 +464,12 @@ async def get_forecast(
                 ]
 
                 if relevant_weather:
-                    avg_weather = _get_average_weather(relevant_weather)
+                    avg_weather = _get_average_weather(
+                        relevant_weather,
+                        pressure_trend_data,
+                        solunar_data,
+                        list(hour_ranges[tod]),
+                    )
 
                     fish_settings_obj = FishSettings(
                         fish_type_id=custom_settings.fish_type_id,
@@ -428,6 +506,18 @@ async def get_forecast(
                         fish_settings_dict, season, category or ""
                     )
 
+                    tod_solunar = []
+                    if solunar_data:
+                        tod_solunar = [
+                            SolunarPeriodSchema(
+                                start=p.start.strftime("%H:%M"),
+                                end=p.end.strftime("%H:%M"),
+                                period_type=p.period_type,
+                                strength=round(p.strength, 2),
+                            )
+                            for p in get_solunar_periods_for_hour(solunar_data, hour)
+                        ]
+
                     time_forecasts.append(
                         TimeOfDayForecast(
                             time_of_day=tod,
@@ -447,6 +537,10 @@ async def get_forecast(
                             recommended_baits=baits,
                             recommended_lures=lures,
                             current_season=season,
+                            solunar_periods=tod_solunar if tod_solunar else None,
+                            pressure_trend_direction=pressure_trend_data.direction if pressure_trend_data else None,
+                            pressure_stability=round(pressure_trend_data.stability, 2) if pressure_trend_data else None,
+                            is_solunar_peak=avg_weather.is_solunar_major or avg_weather.is_solunar_minor,
                         )
                     )
 
@@ -495,10 +589,15 @@ async def get_forecast(
         else None,
         moon_phase=float(first_weather.moon_phase)
         if first_weather.moon_phase
-        else None,
+        else (moon_data.phase if moon_data else None),
+        moon_phase_name=moon_data.phase_name if moon_data else None,
+        moon_illumination=round(moon_data.illumination, 1) if moon_data else None,
         sunrise=str(first_weather.sunrise) if first_weather.sunrise else None,
         sunset=str(first_weather.sunset) if first_weather.sunset else None,
         timezone=region.timezone,
+        solunar_periods=solunar_schemas if solunar_schemas else None,
+        pressure_trend_direction=pressure_trend_data.direction if pressure_trend_data else None,
+        pressure_stability=round(pressure_trend_data.stability, 2) if pressure_trend_data else None,
     )
 
     multi_day = []
@@ -538,19 +637,14 @@ async def get_forecast(
     return response
 
 
-def _get_average_weather(weather_records: List[WeatherData]) -> WeatherConditions:
+def _get_average_weather(
+    weather_records: List[WeatherData],
+    pressure_trend_data=None,
+    solunar_data=None,
+    hour_range: list = None,
+) -> WeatherConditions:
     if not weather_records:
-        return WeatherConditions(
-            temperature=None,
-            pressure_hpa=None,
-            wind_speed=None,
-            wind_direction=None,
-            cloudiness=None,
-            precipitation_mm=None,
-            moon_phase=None,
-            sunrise=None,
-            sunset=None,
-        )
+        return WeatherConditions()
 
     temps = [w.temperature for w in weather_records if w.temperature is not None]
     pressures = [w.pressure_hpa for w in weather_records if w.pressure_hpa is not None]
@@ -566,6 +660,27 @@ def _get_average_weather(weather_records: List[WeatherData]) -> WeatherCondition
 
     first = weather_records[0]
 
+    is_solunar_major = False
+    is_solunar_minor = False
+    solunar_strength = 0.0
+
+    if solunar_data and hour_range:
+        for h in hour_range:
+            from datetime import time as dt_time
+
+            check = dt_time(h, 30)
+            in_period, ptype, strength = is_time_in_solunar_period(
+                check,
+                solunar_data.major_periods + solunar_data.minor_periods,
+            )
+            if in_period:
+                if ptype == "major":
+                    is_solunar_major = True
+                    solunar_strength = max(solunar_strength, strength)
+                elif ptype == "minor":
+                    is_solunar_minor = True
+                    solunar_strength = max(solunar_strength, strength)
+
     return WeatherConditions(
         temperature=Decimal(str(sum(temps) / len(temps))) if temps else None,
         pressure_hpa=int(sum(pressures) / len(pressures)) if pressures else None,
@@ -576,6 +691,10 @@ def _get_average_weather(weather_records: List[WeatherData]) -> WeatherCondition
         moon_phase=Decimal(str(moons[0])) if moons else None,
         sunrise=first.sunrise,
         sunset=first.sunset,
+        pressure_trend_data=pressure_trend_data,
+        is_solunar_major=is_solunar_major,
+        is_solunar_minor=is_solunar_minor,
+        solunar_strength=solunar_strength,
     )
 
 

@@ -6,6 +6,13 @@ from typing import Optional, List
 from pydantic import BaseModel
 
 
+class SolunarPeriodSchema(BaseModel):
+    start: str
+    end: str
+    period_type: str
+    strength: float
+
+
 class RegionBase(BaseModel):
     name: str
     code: str
@@ -78,6 +85,10 @@ class TimeOfDayForecast(BaseModel):
     recommended_baits: Optional[List[str]] = None
     recommended_lures: Optional[List[str]] = None
     current_season: Optional[str] = None
+    solunar_periods: Optional[List[SolunarPeriodSchema]] = None
+    pressure_trend_direction: Optional[str] = None
+    pressure_stability: Optional[float] = None
+    is_solunar_peak: Optional[bool] = None
 
 
 class FishForecastResponse(BaseModel):
@@ -92,9 +103,14 @@ class WeatherSummaryResponse(BaseModel):
     wind_speed: Optional[float]
     precipitation: Optional[float]
     moon_phase: Optional[float]
+    moon_phase_name: Optional[str] = None
+    moon_illumination: Optional[float] = None
     sunrise: Optional[str]
     sunset: Optional[str]
     timezone: Optional[str] = None
+    solunar_periods: Optional[List[SolunarPeriodSchema]] = None
+    pressure_trend_direction: Optional[str] = None
+    pressure_stability: Optional[float] = None
 
 
 class MultiDayForecastItem(BaseModel):

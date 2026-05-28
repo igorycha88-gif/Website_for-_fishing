@@ -13,15 +13,27 @@ export interface RegionsResponse {
   total: number;
 }
 
+export interface SolunarPeriod {
+  start: string;
+  end: string;
+  period_type: 'major' | 'minor';
+  strength: number;
+}
+
 export interface WeatherSummary {
   temperature: number | null;
   pressure: number | null;
   wind_speed: number | null;
   precipitation: number | null;
   moon_phase: number | null;
+  moon_phase_name: string | null;
+  moon_illumination: number | null;
   sunrise: string | null;
   sunset: string | null;
   timezone?: string;
+  solunar_periods: SolunarPeriod[] | null;
+  pressure_trend_direction: 'rising' | 'falling' | 'stable' | null;
+  pressure_stability: number | null;
 }
 
 export interface FishTypeBrief {
@@ -46,6 +58,10 @@ export interface TimeOfDayForecast {
   recommended_baits: string[] | null;
   recommended_lures: string[] | null;
   current_season: string | null;
+  solunar_periods: SolunarPeriod[] | null;
+  pressure_trend_direction: 'rising' | 'falling' | 'stable' | null;
+  pressure_stability: number | null;
+  is_solunar_peak: boolean | null;
 }
 
 export interface FishForecast {
@@ -113,9 +129,11 @@ export const MOON_PHASE_LABELS: Record<string, string> = {
   0.75: 'Последняя четверть',
 };
 
-export function getMoonPhaseLabel(phase: number | null): string {
-  if (phase === null) return '';
+export function getMoonPhaseLabel(phase: number | null, phaseName?: string | null): string {
+  if (phase === null || phase === undefined) return '';
   
+  if (phaseName) return phaseName;
+
   if (phase < 0.1 || phase > 0.9) return 'Новолуние 🌑';
   if (phase >= 0.1 && phase < 0.2) return 'Молодая луна 🌒';
   if (phase >= 0.2 && phase < 0.35) return 'Первая четверть 🌓';
@@ -157,10 +175,11 @@ export function getMoonPhaseType(phase: number | null): string {
   return 'Убывающая';
 }
 
-export function getMoonPhaseTooltip(phase: number | null): string {
+export function getMoonPhaseTooltip(phase: number | null, illumination?: number | null): string {
   if (phase === null) return '';
   
   const type = getMoonPhaseType(phase);
+  const illumText = illumination !== null && illumination !== undefined ? ` Освещённость: ${Math.round(illumination)}%.` : '';
   
   const tooltips: Record<string, string> = {
     'Новолуние': '🌑 Новолуние. Хорошее время для ночной рыбалки. Рыба активна.',
@@ -169,7 +188,35 @@ export function getMoonPhaseTooltip(phase: number | null): string {
     'Убывающая': '🌗 Убывающая луна. Хороший клев белой рыбы.',
   };
   
-  return tooltips[type] || '';
+  return (tooltips[type] || '') + illumText;
+}
+
+export function getPressureTrendIcon(direction: string | null | undefined): string {
+  if (!direction) return '';
+  if (direction === 'rising') return '↑';
+  if (direction === 'falling') return '↓';
+  return '→';
+}
+
+export function getPressureTrendColor(direction: string | null | undefined): string {
+  if (!direction) return '';
+  if (direction === 'rising') return 'text-green-500';
+  if (direction === 'falling') return 'text-red-500';
+  return 'text-gray-500';
+}
+
+export function getPressureTrendLabel(direction: string | null | undefined): string {
+  if (!direction) return '';
+  if (direction === 'rising') return 'Растёт';
+  if (direction === 'falling') return 'Падает';
+  return 'Стабильное';
+}
+
+export function formatSolunarPeriods(periods: SolunarPeriod[] | null | undefined): string {
+  if (!periods || periods.length === 0) return '';
+  return periods
+    .map(p => `${p.period_type === 'major' ? '⭐' : '🔹'} ${p.start}-${p.end}`)
+    .join(', ');
 }
 
 export interface AvailableDatesResponse {

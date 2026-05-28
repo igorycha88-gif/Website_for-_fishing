@@ -17,6 +17,7 @@ from tenacity import (
 from app.core.config import settings
 from app.core.logging_config import get_logger
 from app.models.forecast import Region, WeatherData
+from app.services.moon_calculation import calculate_moon_phase
 
 logger = get_logger(__name__)
 
@@ -117,7 +118,7 @@ class WeatherCollectorService:
         if not forecast_data:
             raise Exception("Failed to fetch forecast from API")
 
-        return await self._save_weather_data(region_id, forecast_data)
+        return await self._save_weather_data(region_id, forecast_data, lat, lon)
 
     async def _fetch_forecast_from_api(
         self, lat: float, lon: float, days: int = 4
@@ -163,7 +164,7 @@ class WeatherCollectorService:
                 return None
 
     async def _save_weather_data(
-        self, region_id: UUID, forecast_data: Dict[str, Any]
+        self, region_id: UUID, forecast_data: Dict[str, Any], lat: float = 0.0, lon: float = 0.0
     ) -> int:
         city_data = forecast_data.get("city", {})
         forecast_list = forecast_data.get("list", [])
@@ -196,6 +197,8 @@ class WeatherCollectorService:
             )
         )
 
+        moon_phases_by_date: Dict[date, Decimal] = {}
+
         for item in forecast_list:
             dt = datetime.fromtimestamp(item["dt"], tz=timezone.utc)
             forecast_date = dt.date()
@@ -203,6 +206,18 @@ class WeatherCollectorService:
 
             if forecast_date >= cutoff_date:
                 continue
+
+            if forecast_date not in moon_phases_by_date and lat != 0.0 and lon != 0.0:
+                try:
+                    moon_data = calculate_moon_phase(forecast_date, lat, lon)
+                    moon_phases_by_date[forecast_date] = Decimal(str(round(moon_data.phase, 4)))
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to calculate moon phase: {e}",
+                        service="forecast-service",
+                        region_id=str(region_id),
+                    )
+                    moon_phases_by_date[forecast_date] = None
 
             main = item.get("main", {})
             wind = item.get("wind", {})
@@ -246,7 +261,7 @@ class WeatherCollectorService:
                 weather_icon=weather_icon,
                 visibility_m=visibility_m,
                 uv_index=None,
-                moon_phase=None,
+                moon_phase=moon_phases_by_date.get(forecast_date),
                 sunrise=sunrise,
                 sunset=sunset,
             )
@@ -261,6 +276,7 @@ class WeatherCollectorService:
             service="forecast-service",
             region_id=str(region_id),
             records=saved_count,
+            moon_dates=len(moon_phases_by_date),
         )
 
         return saved_count

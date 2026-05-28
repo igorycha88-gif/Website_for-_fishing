@@ -7,9 +7,12 @@ from app.services.forecast_calculation import (
     TimeOfDay,
     WeatherConditions,
     FishSettings,
+    PressureTrend,
     get_time_of_day,
+    get_season,
     calculate_temperature_score,
     calculate_pressure_score,
+    calculate_pressure_trend,
     calculate_wind_score,
     calculate_moon_score,
     calculate_precipitation_score,
@@ -230,10 +233,22 @@ class TestCalculatePressureScore:
         assert score >= 100
 
     def test_pressure_with_falling_trend(self, fish_settings):
+        from app.services.forecast_calculation import PressureTrend
+
+        trend_data = PressureTrend(
+            trend_3h=-3.0,
+            trend_6h=-5.0,
+            trend_12h=-8.0,
+            trend_24h=-12.0,
+            stability=0.2,
+            rate_of_change=-1.0,
+            direction="falling",
+        )
         weather = WeatherConditions(
             temperature=Decimal("10"),
             pressure_hpa=1010,
             pressure_trend=Decimal("-5"),
+            pressure_trend_data=trend_data,
             wind_speed=Decimal("3"),
             wind_direction=180,
             cloudiness=50,
@@ -1004,3 +1019,267 @@ class TestGetSeasonalRecommendations:
                 fish_settings, season, "predatory"
             )
             assert lures == expected
+
+
+class TestCalculatePressureTrend:
+    def test_stable_pressure(self):
+        records = [(0, 1013), (3, 1013), (6, 1014), (9, 1013), (12, 1013), (15, 1013), (18, 1013), (21, 1013)]
+        trend = calculate_pressure_trend(records)
+        assert trend.direction == "stable"
+        assert trend.stability > 0.8
+
+    def test_rising_pressure(self):
+        records = [(0, 1005), (3, 1007), (6, 1009), (9, 1011), (12, 1013), (15, 1015), (18, 1017), (21, 1019)]
+        trend = calculate_pressure_trend(records)
+        assert trend.direction == "rising"
+        assert trend.rate_of_change > 0
+
+    def test_falling_pressure(self):
+        records = [(0, 1020), (3, 1018), (6, 1016), (9, 1014), (12, 1012), (15, 1010), (18, 1008), (21, 1006)]
+        trend = calculate_pressure_trend(records)
+        assert trend.direction == "falling"
+        assert trend.rate_of_change < 0
+
+    def test_unstable_pressure(self):
+        records = [(0, 1013), (3, 1000), (6, 1025), (9, 995), (12, 1030)]
+        trend = calculate_pressure_trend(records)
+        assert trend.stability < 0.5
+
+    def test_single_record_returns_default(self):
+        records = [(12, 1013)]
+        trend = calculate_pressure_trend(records)
+        assert trend.direction == "stable"
+
+    def test_empty_records_returns_default(self):
+        trend = calculate_pressure_trend([])
+        assert trend.direction == "stable"
+        assert trend.stability == 1.0
+
+    def test_trend_values_in_mmhg(self):
+        records = [(0, 1013), (3, 1013), (6, 1020)]
+        trend = calculate_pressure_trend(records)
+        assert trend.trend_3h != 0
+
+
+class TestGetSeason:
+    def test_spring(self):
+        assert get_season(3) == "spring"
+        assert get_season(4) == "spring"
+        assert get_season(5) == "spring"
+
+    def test_summer(self):
+        assert get_season(6) == "summer"
+        assert get_season(7) == "summer"
+        assert get_season(8) == "summer"
+
+    def test_autumn(self):
+        assert get_season(9) == "autumn"
+        assert get_season(10) == "autumn"
+        assert get_season(11) == "autumn"
+
+    def test_winter(self):
+        assert get_season(12) == "winter"
+        assert get_season(1) == "winter"
+        assert get_season(2) == "winter"
+
+
+class TestMoonScoreV3:
+    def test_moon_score_with_season(self, fish_settings):
+        weather_summer = WeatherConditions(moon_phase=Decimal("0.0"))
+        score_summer = calculate_moon_score(weather_summer, fish_settings, "summer")
+
+        weather_winter = WeatherConditions(moon_phase=Decimal("0.0"))
+        score_winter = calculate_moon_score(weather_winter, fish_settings, "winter")
+
+        assert score_winter >= score_summer
+
+    def test_moon_score_with_solunar_major(self, fish_settings):
+        weather_no_solunar = WeatherConditions(
+            moon_phase=Decimal("0.0"),
+            is_solunar_major=False,
+        )
+        weather_solunar_major = WeatherConditions(
+            moon_phase=Decimal("0.0"),
+            is_solunar_major=True,
+            solunar_strength=0.9,
+        )
+        score_normal = calculate_moon_score(weather_no_solunar, fish_settings, "spring")
+        score_solunar = calculate_moon_score(weather_solunar_major, fish_settings, "spring")
+        assert score_solunar > score_normal
+
+    def test_moon_score_with_solunar_minor(self, fish_settings):
+        weather_solunar_minor = WeatherConditions(
+            moon_phase=Decimal("0.25"),
+            is_solunar_minor=True,
+            solunar_strength=0.6,
+        )
+        weather_normal = WeatherConditions(
+            moon_phase=Decimal("0.25"),
+        )
+        score_minor = calculate_moon_score(weather_solunar_minor, fish_settings, "spring")
+        score_normal = calculate_moon_score(weather_normal, fish_settings, "spring")
+        assert score_minor > score_normal
+
+
+class TestPressureScoreV3:
+    def test_pressure_with_stable_trend(self, fish_settings):
+        trend = PressureTrend(
+            stability=0.9,
+            rate_of_change=0.1,
+            direction="stable",
+        )
+        weather = WeatherConditions(
+            pressure_hpa=1013,
+            pressure_trend_data=trend,
+        )
+        score = calculate_pressure_score(weather, fish_settings)
+        assert score >= 100
+
+    def test_pressure_with_rapid_change(self, fish_settings):
+        trend = PressureTrend(
+            stability=0.2,
+            rate_of_change=3.0,
+            direction="rising",
+        )
+        weather = WeatherConditions(
+            pressure_hpa=1013,
+            pressure_trend_data=trend,
+        )
+        score = calculate_pressure_score(weather, fish_settings)
+        assert score < 100
+
+    def test_pressure_without_trend_data(self, fish_settings):
+        weather = WeatherConditions(
+            pressure_hpa=1013,
+            pressure_trend_data=None,
+        )
+        score = calculate_pressure_score(weather, fish_settings)
+        assert score == 100.0
+
+
+class TestMultiplicativeModel:
+    def test_perfect_conditions_high_score(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            wind_direction=200,
+            cloudiness=60,
+            precipitation_mm=Decimal("0"),
+            moon_phase=Decimal("0.0"),
+            is_solunar_major=True,
+            solunar_strength=0.9,
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
+        )
+        assert result["bite_score"] >= 60
+
+    def test_one_bad_factor_reduces_score(self, fish_settings):
+        weather_good = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            wind_direction=200,
+            cloudiness=60,
+            precipitation_mm=Decimal("0"),
+            moon_phase=Decimal("0.5"),
+        )
+        weather_bad_wind = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("20"),
+            wind_direction=0,
+            cloudiness=100,
+            precipitation_mm=Decimal("15"),
+            moon_phase=Decimal("0.5"),
+        )
+        result_good = calculate_bite_score(
+            weather_good, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
+        )
+        result_bad = calculate_bite_score(
+            weather_bad_wind, fish_settings, hour=14, month=6, check_date=date(2025, 6, 15)
+        )
+        assert result_good["bite_score"] > result_bad["bite_score"]
+
+    def test_spawn_overrides_everything(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            is_solunar_major=True,
+            solunar_strength=1.0,
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=3, check_date=date(2025, 3, 15)
+        )
+        assert result["bite_score"] == 0
+        assert result["is_spawn_period"] is True
+
+    def test_score_always_in_range(self, fish_settings):
+        for temp in [-20, 0, 15, 40]:
+            for pressure in [950, 1013, 1050]:
+                for wind in [0, 5, 20]:
+                    weather = WeatherConditions(
+                        temperature=Decimal(str(temp)),
+                        pressure_hpa=pressure,
+                        wind_speed=Decimal(str(wind)),
+                    )
+                    result = calculate_bite_score(
+                        weather, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
+                    )
+                    assert 0 <= result["bite_score"] <= 100, f"Score out of range for temp={temp}, pressure={pressure}, wind={wind}"
+
+
+class TestGenerateRecommendationV3:
+    def test_stable_pressure_recommendation(self, fish_settings):
+        trend = PressureTrend(stability=0.9, rate_of_change=0.1, direction="stable")
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            pressure_trend_data=trend,
+        )
+        rec = generate_recommendation(85, weather, fish_settings)
+        assert "Стабильное давление" in rec
+
+    def test_unstable_pressure_recommendation(self, fish_settings):
+        trend = PressureTrend(stability=0.1, rate_of_change=2.5, direction="falling")
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            pressure_trend_data=trend,
+        )
+        rec = generate_recommendation(40, weather, fish_settings)
+        assert "нестабильно" in rec or "снижен" in rec
+
+    def test_solunar_recommendation(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            is_solunar_major=True,
+        )
+        rec = generate_recommendation(80, weather, fish_settings)
+        assert "Solunar major" in rec
+
+    def test_new_moon_recommendation(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            moon_phase=Decimal("0.02"),
+        )
+        rec = generate_recommendation(80, weather, fish_settings)
+        assert "Новолуние" in rec
+
+    def test_full_moon_recommendation(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            moon_phase=Decimal("0.5"),
+        )
+        rec = generate_recommendation(80, weather, fish_settings)
+        assert "Полнолуние" in rec

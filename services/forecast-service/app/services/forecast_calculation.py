@@ -1,8 +1,9 @@
+import math
 from dataclasses import dataclass
 from datetime import date, time
 from decimal import Decimal
 from enum import Enum
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from app.core.logging_config import get_logger
@@ -18,6 +19,17 @@ class TimeOfDay(Enum):
 
 
 @dataclass
+class PressureTrend:
+    trend_3h: float = 0.0
+    trend_6h: float = 0.0
+    trend_12h: float = 0.0
+    trend_24h: float = 0.0
+    stability: float = 1.0
+    rate_of_change: float = 0.0
+    direction: str = "stable"
+
+
+@dataclass
 class WeatherConditions:
     temperature: Optional[Decimal] = None
     pressure_hpa: Optional[int] = None
@@ -29,6 +41,10 @@ class WeatherConditions:
     sunrise: Optional[time] = None
     sunset: Optional[time] = None
     pressure_trend: Decimal = Decimal("0")
+    pressure_trend_data: Optional[PressureTrend] = None
+    is_solunar_major: bool = False
+    is_solunar_minor: bool = False
+    solunar_strength: float = 0.0
 
 
 @dataclass
@@ -84,6 +100,75 @@ def get_time_of_day(hour: int) -> TimeOfDay:
         return TimeOfDay.NIGHT
 
 
+def get_season(month: int) -> str:
+    if month in [3, 4, 5]:
+        return "spring"
+    elif month in [6, 7, 8]:
+        return "summer"
+    elif month in [9, 10, 11]:
+        return "autumn"
+    else:
+        return "winter"
+
+
+def calculate_pressure_trend(
+    pressure_records: List[Tuple[int, int]],
+) -> PressureTrend:
+    if len(pressure_records) < 2:
+        return PressureTrend()
+
+    sorted_records = sorted(pressure_records, key=lambda x: x[0])
+    hours = [r[0] for r in sorted_records]
+    pressures_hpa = [r[1] for r in sorted_records]
+    pressures_mmhg = [p * 0.750062 for p in pressures_hpa]
+
+    current_hour = hours[-1]
+    current_pressure = pressures_mmhg[-1]
+
+    def _trend_for_hours(target_hours_back: float) -> float:
+        target_hour = current_hour - target_hours_back
+        closest_idx = 0
+        closest_dist = abs(hours[0] - target_hour)
+        for i, h in enumerate(hours):
+            dist = abs(h - target_hour)
+            if dist < closest_dist:
+                closest_dist = dist
+                closest_idx = i
+        return current_pressure - pressures_mmhg[closest_idx]
+
+    trend_3h = _trend_for_hours(3)
+    trend_6h = _trend_for_hours(6)
+    trend_12h = _trend_for_hours(12)
+    trend_24h = _trend_for_hours(24)
+
+    if len(pressures_mmhg) >= 2:
+        mean = sum(pressures_mmhg) / len(pressures_mmhg)
+        variance = sum((p - mean) ** 2 for p in pressures_mmhg) / len(pressures_mmhg)
+        std_dev = math.sqrt(variance)
+        stability = max(0.0, min(1.0, 1.0 - std_dev / 5.0))
+    else:
+        stability = 0.5
+
+    rate_of_change = trend_3h / 3.0 if trend_3h != 0 else 0.0
+
+    if abs(rate_of_change) < 0.5:
+        direction = "stable"
+    elif rate_of_change > 0:
+        direction = "rising"
+    else:
+        direction = "falling"
+
+    return PressureTrend(
+        trend_3h=round(trend_3h, 2),
+        trend_6h=round(trend_6h, 2),
+        trend_12h=round(trend_12h, 2),
+        trend_24h=round(trend_24h, 2),
+        stability=round(stability, 3),
+        rate_of_change=round(rate_of_change, 3),
+        direction=direction,
+    )
+
+
 def calculate_temperature_score(
     weather: WeatherConditions, fish: FishSettings
 ) -> float:
@@ -111,13 +196,14 @@ def calculate_temperature_score(
     return max(0.0, 100.0 - penalty)
 
 
-def calculate_pressure_score(weather: WeatherConditions, fish: FishSettings) -> float:
+def calculate_pressure_score(
+    weather: WeatherConditions, fish: FishSettings
+) -> float:
     if weather.pressure_hpa is None:
         return 50.0
 
     pressure_mmhg = weather.pressure_hpa * 0.750062
     pressure = float(pressure_mmhg)
-    trend = float(weather.pressure_trend)
     opt_min = fish.optimal_pressure_min
     opt_max = fish.optimal_pressure_max
 
@@ -127,14 +213,21 @@ def calculate_pressure_score(weather: WeatherConditions, fish: FishSettings) -> 
         deviation = min(abs(pressure - opt_min), abs(pressure - opt_max))
         base_score = max(0.0, 100.0 - deviation * 3)
 
-    if trend > 3:
-        base_score += 15
-    elif trend > 0:
-        base_score += 8
-    elif trend < -3:
-        base_score -= 20
-    elif trend < 0:
-        base_score -= 10
+    trend_data = weather.pressure_trend_data
+    if trend_data:
+        rate = abs(trend_data.rate_of_change)
+        if rate > 2.0:
+            base_score *= 0.7
+        elif rate > 1.0:
+            base_score *= 0.9
+
+        if trend_data.stability >= 0.8:
+            base_score *= 1.1
+        elif trend_data.stability < 0.3:
+            base_score *= 0.8
+
+        if trend_data.direction == "stable":
+            base_score *= 1.05
 
     return max(0.0, min(100.0, base_score))
 
@@ -164,7 +257,9 @@ def calculate_wind_score(weather: WeatherConditions, fish: FishSettings) -> floa
     return max(0.0, min(100.0, base_score))
 
 
-def calculate_moon_score(weather: WeatherConditions, fish: FishSettings) -> float:
+def calculate_moon_score(
+    weather: WeatherConditions, fish: FishSettings, season: str = "summer"
+) -> float:
     if weather.moon_phase is None:
         return 50.0
 
@@ -178,10 +273,26 @@ def calculate_moon_score(weather: WeatherConditions, fish: FishSettings) -> floa
     ]
     min_distance = min(distances)
 
-    raw_score = 100.0 - min_distance * 400
-    raw_score = max(0.0, raw_score)
+    phase_score = 100.0 - min_distance * 300
+    phase_score = max(10.0, min(100.0, phase_score))
 
-    return 50.0 + (raw_score - 50.0) * sensitivity
+    season_mult = {
+        "spring": 1.0,
+        "summer": 0.8,
+        "autumn": 1.2,
+        "winter": 1.3,
+    }.get(season, 1.0)
+
+    effective_sensitivity = min(1.0, sensitivity * season_mult)
+
+    base = 50.0 + (phase_score - 50.0) * effective_sensitivity
+
+    if weather.is_solunar_major:
+        base = min(100.0, base + 20 * weather.solunar_strength)
+    elif weather.is_solunar_minor:
+        base = min(100.0, base + 10 * weather.solunar_strength)
+
+    return max(0.0, min(100.0, base))
 
 
 def calculate_precipitation_score(weather: WeatherConditions) -> float:
@@ -222,12 +333,12 @@ def get_season_multiplier(fish: FishSettings, month: int) -> float:
             if fish.active_in_winter
             else multipliers["inactive_fish"]
         )
-    elif month in [3, 4, 5]:
-        return 1.0
-    elif month in [6, 7, 8]:
-        return 1.0
-    else:
-        return 1.0
+    return 1.0
+
+
+def _geometric_mean(*scores: float) -> float:
+    clamped = [max(1.0, s) for s in scores]
+    return math.exp(sum(math.log(s) for s in clamped) / len(clamped))
 
 
 def is_in_spawn_period(fish: FishSettings, check_date: date) -> Tuple[bool, str]:
@@ -290,22 +401,42 @@ def calculate_bite_score(
         }
 
     time_of_day = get_time_of_day(hour)
+    season = get_season(month)
 
     temp_score = calculate_temperature_score(weather, fish)
     pressure_score = calculate_pressure_score(weather, fish)
     wind_score = calculate_wind_score(weather, fish)
-    moon_score = calculate_moon_score(weather, fish)
+    moon_score = calculate_moon_score(weather, fish, season)
     precip_score = calculate_precipitation_score(weather)
     time_score = calculate_time_score(time_of_day, fish)
 
-    bite_score = (
-        temp_score * 0.25
-        + pressure_score * 0.25
-        + time_score * 0.20
-        + wind_score * 0.15
-        + moon_score * 0.10
-        + precip_score * 0.05
-    )
+    base = _geometric_mean(temp_score, pressure_score)
+
+    solunar_synergy = 1.0 + 0.15 * (moon_score / 100.0) * (pressure_score / 100.0)
+
+    temp_pressure_synergy = 1.0
+    if pressure_score >= 70 and temp_score >= 70:
+        temp_pressure_synergy = 1.10
+    elif pressure_score < 40 or temp_score < 40:
+        temp_pressure_synergy = 0.85
+
+    time_adjusted = time_score
+    if weather.is_solunar_major:
+        time_adjusted = min(100.0, time_score * 1.25)
+    elif weather.is_solunar_minor:
+        time_adjusted = min(100.0, time_score * 1.10)
+
+    trend_data = weather.pressure_trend_data
+    if trend_data:
+        stability_mult = 0.85 + 0.15 * trend_data.stability
+    else:
+        stability_mult = 1.0
+
+    wind_cap = wind_score / 100.0
+    precip_cap = precip_score / 100.0
+
+    bite_score = base * solunar_synergy * temp_pressure_synergy * stability_mult
+    bite_score = bite_score * (time_adjusted / 100.0) * wind_cap * precip_cap
 
     season_mult = get_season_multiplier(fish, month)
     bite_score *= season_mult
@@ -347,10 +478,23 @@ def generate_recommendation(
     if weather.wind_speed is not None and float(weather.wind_speed) > 6:
         recommendations.append("Ветреная погода — используйте тяжелые приманки.")
 
-    if float(weather.pressure_trend) < -3:
-        recommendations.append("Давление падает — рыба пассивна.")
-    elif float(weather.pressure_trend) > 3:
-        recommendations.append("Давление растет — клев должен улучшаться.")
+    trend_data = weather.pressure_trend_data
+    if trend_data:
+        if trend_data.stability >= 0.8:
+            recommendations.append("Стабильное давление — отличные условия.")
+        elif trend_data.stability < 0.3:
+            recommendations.append("Давление нестабильно — рыба может быть осторожной.")
+        if abs(trend_data.rate_of_change) > 2.0:
+            recommendations.append("Резкое изменение давления — клёв снижен.")
+        elif trend_data.direction == "rising" and trend_data.rate_of_change > 0.5:
+            recommendations.append("Давление растёт — клев должен улучшаться.")
+        elif trend_data.direction == "falling" and trend_data.rate_of_change < -0.5:
+            recommendations.append("Давление падает — рыба пассивна.")
+    else:
+        if float(weather.pressure_trend) < -3:
+            recommendations.append("Давление падает — рыба пассивна.")
+        elif float(weather.pressure_trend) > 3:
+            recommendations.append("Давление растет — клев должен улучшаться.")
 
     if weather.temperature is not None:
         temp = float(weather.temperature)
@@ -362,9 +506,14 @@ def generate_recommendation(
     if weather.moon_phase is not None:
         phase = float(weather.moon_phase)
         if phase < 0.1 or phase > 0.9:
-            recommendations.append("Новолуние — хороший период по Solunar теории.")
+            recommendations.append("Новолуние — ночная рыбалка может быть очень удачной.")
         elif 0.4 < phase < 0.6:
-            recommendations.append("Полнолуние — пиковая активность.")
+            recommendations.append("Полнолуние — рыба может кормиться всю ночь.")
+
+    if weather.is_solunar_major:
+        recommendations.append("Solunar major period — пиковая активность рыбы.")
+    elif weather.is_solunar_minor:
+        recommendations.append("Solunar minor period — умеренная активность.")
 
     return " ".join(recommendations)
 

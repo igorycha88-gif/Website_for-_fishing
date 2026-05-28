@@ -27,6 +27,7 @@ import {
   ForecastResponse,
   FishForecast,
   FishTypeBrief,
+  SolunarPeriod,
   TIME_OF_DAY_LABELS,
   TIME_OF_DAY_ICONS,
   getMoonPhaseLabel,
@@ -35,6 +36,10 @@ import {
   getBiteScoreLabel,
   getBiteScoreColor,
   getBiteScoreTextColor,
+  getPressureTrendIcon,
+  getPressureTrendColor,
+  getPressureTrendLabel,
+  formatSolunarPeriods,
   DaySummaryResponse,
 } from "@/types/forecast";
 
@@ -564,8 +569,13 @@ export default function FishingForecast({
                   <Thermometer className="w-5 h-5 text-purple-500" />
                   <div>
                     <div className="text-xs text-gray-500">Давление</div>
-                    <div className="font-semibold text-gray-800">
+                    <div className="font-semibold text-gray-800 flex items-center gap-1">
                       {forecast.weather.pressure ? `${forecast.weather.pressure} мм` : "—"}
+                      {forecast.weather.pressure_trend_direction && (
+                        <span className={`text-xs ${getPressureTrendColor(forecast.weather.pressure_trend_direction)}`} title={getPressureTrendLabel(forecast.weather.pressure_trend_direction)}>
+                          {getPressureTrendIcon(forecast.weather.pressure_trend_direction)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -582,13 +592,13 @@ export default function FishingForecast({
 
                 <div 
                   className="flex items-center gap-2 bg-white/70 rounded-lg px-3 py-2 cursor-help"
-                  title={getMoonPhaseTooltip(forecast.weather.moon_phase)}
+                  title={getMoonPhaseTooltip(forecast.weather.moon_phase, forecast.weather.moon_illumination)}
                 >
-                  <span className="text-lg">{getMoonPhaseLabel(forecast.weather.moon_phase).split(" ")[1] || "🌙"}</span>
+                  <span className="text-lg">{getMoonPhaseLabel(forecast.weather.moon_phase, forecast.weather.moon_phase_name).split(" ").pop() || "🌙"}</span>
                   <div>
                     <div className="text-xs text-gray-500">Луна</div>
                     <div className="font-semibold text-gray-800 text-xs">
-                      ({getMoonPhaseType(forecast.weather.moon_phase) || '—'})
+                      {forecast.weather.moon_phase_name || getMoonPhaseType(forecast.weather.moon_phase) || '—'}
                     </div>
                   </div>
                 </div>
@@ -603,6 +613,27 @@ export default function FishingForecast({
                   <div className="flex items-center gap-1.5 text-sm text-gray-600">
                     <Sunset className="w-4 h-4 text-indigo-500" />
                     <span>{convertTimeFromUtc(forecast.weather.sunset, forecast.weather.timezone)}</span>
+                  </div>
+                </div>
+              )}
+
+              {forecast.weather.solunar_periods && forecast.weather.solunar_periods.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-white/50">
+                  <div className="text-xs font-medium text-gray-600 mb-1.5 text-center">Solunar периоды</div>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {forecast.weather.solunar_periods.map((p, i) => (
+                      <div
+                        key={i}
+                        className={`px-2 py-1 rounded-md text-xs ${
+                          p.period_type === 'major'
+                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                            : 'bg-blue-100 text-blue-800 border border-blue-200'
+                        }`}
+                        title={p.period_type === 'major' ? 'Major period — пиковая активность' : 'Minor period — умеренная активность'}
+                      >
+                        {p.period_type === 'major' ? '⭐' : '🔹'} {p.start}–{p.end}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -710,8 +741,13 @@ export default function FishingForecast({
                           {fishForecast.forecasts.map((tod) => (
                             <div
                               key={tod.time_of_day}
-                              className="bg-white rounded-lg p-2 text-center"
+                              className={`bg-white rounded-lg p-2 text-center relative ${
+                                tod.is_solunar_peak ? 'ring-2 ring-amber-300' : ''
+                              }`}
                             >
+                              {tod.is_solunar_peak && (
+                                <div className="absolute -top-1 -right-1 text-[10px]" title="Solunar период">⭐</div>
+                              )}
                               <div className="text-lg mb-1">
                                 {TIME_OF_DAY_ICONS[tod.time_of_day]}
                               </div>
@@ -727,6 +763,11 @@ export default function FishingForecast({
                                   style={{ width: `${tod.bite_score}%` }}
                                 />
                               </div>
+                              {tod.solunar_periods && tod.solunar_periods.length > 0 && (
+                                <div className="mt-1 text-[9px] text-amber-600">
+                                  {tod.solunar_periods.map(p => `${p.start}-${p.end}`).join(', ')}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
