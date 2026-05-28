@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     REDIS_URL: str
     OPENWEATHERMAP_API_KEY: str
     OPENWEATHERMAP_BASE_URL: str = "https://api.openweathermap.org/data/2.5"
+    OPEN_METEO_BASE_URL: str = "https://api.open-meteo.com/v1"
     LOG_LEVEL: str = "INFO"
     LOGSTASH_URL: str = "http://logstash:5000"
     SERVICE_NAME: str = "forecast-service"

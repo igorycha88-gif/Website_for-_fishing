@@ -1,11 +1,12 @@
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Optional, List, Dict, Any
+from typing import Dict, Optional, Any
 from uuid import UUID
 
 import httpx
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from tenacity import (
     retry,
@@ -20,6 +21,8 @@ from app.models.forecast import Region, WeatherData
 from app.services.moon_calculation import calculate_moon_phase
 
 logger = get_logger(__name__)
+
+OPEN_METEO_BASE_URL = "https://api.open-meteo.com/v1/forecast"
 
 
 class WeatherCollectorService:
@@ -118,7 +121,11 @@ class WeatherCollectorService:
         if not forecast_data:
             raise Exception("Failed to fetch forecast from API")
 
-        return await self._save_weather_data(region_id, forecast_data, lat, lon)
+        open_meteo_data = await self._fetch_open_meteo_data(lat, lon, days)
+
+        return await self._save_weather_data(
+            region_id, forecast_data, lat, lon, open_meteo_data
+        )
 
     async def _fetch_forecast_from_api(
         self, lat: float, lon: float, days: int = 4
@@ -134,7 +141,7 @@ class WeatherCollectorService:
         }
 
         logger.debug(
-            f"Fetching forecast from OpenWeatherMap",
+            "Fetching forecast from OpenWeatherMap",
             service="forecast-service",
             lat=lat,
             lon=lon,
@@ -163,8 +170,83 @@ class WeatherCollectorService:
                 )
                 return None
 
+    async def _fetch_open_meteo_data(
+        self, lat: float, lon: float, days: int = 4
+    ) -> Optional[Dict[str, Any]]:
+        url = OPEN_METEO_BASE_URL
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "hourly": "soil_temperature_0_to_7cm,uv_index",
+            "forecast_days": days,
+            "timezone": "UTC",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(url, params=params)
+
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.info(
+                        "Open-Meteo data fetched successfully",
+                        service="forecast-service",
+                        lat=lat,
+                        lon=lon,
+                    )
+                    return data
+                else:
+                    logger.warning(
+                        f"Open-Meteo API error: {response.status_code}",
+                        service="forecast-service",
+                        lat=lat,
+                        lon=lon,
+                    )
+                    return None
+        except Exception as e:
+            logger.warning(
+                f"Open-Meteo fetch failed: {e}",
+                service="forecast-service",
+                lat=lat,
+                lon=lon,
+                error=str(e),
+            )
+            return None
+
+    def _get_open_meteo_hourly_value(
+        self,
+        open_meteo_data: Optional[Dict[str, Any]],
+        field: str,
+        target_date: date,
+        target_hour: int,
+    ) -> Optional[float]:
+        if not open_meteo_data:
+            return None
+
+        try:
+            hourly = open_meteo_data.get("hourly", {})
+            times = hourly.get("time", [])
+            values = hourly.get(field, [])
+
+            if not times or not values:
+                return None
+
+            target_str = f"{target_date}T{target_hour:02d}:00"
+            for i, t in enumerate(times):
+                if i < len(values) and t == target_str:
+                    val = values[i]
+                    return float(val) if val is not None else None
+        except Exception:
+            pass
+        return None
+
     async def _save_weather_data(
-        self, region_id: UUID, forecast_data: Dict[str, Any], lat: float = 0.0, lon: float = 0.0
+        self,
+        region_id: UUID,
+        forecast_data: Dict[str, Any],
+        lat: float = 0.0,
+        lon: float = 0.0,
+        open_meteo_data: Optional[Dict[str, Any]] = None,
     ) -> int:
         city_data = forecast_data.get("city", {})
         forecast_list = forecast_data.get("list", [])
@@ -197,7 +279,15 @@ class WeatherCollectorService:
             )
         )
 
-        moon_phases_by_date: Dict[date, Decimal] = {}
+        await self.db.execute(
+            delete(WeatherData).where(
+                WeatherData.region_id == region_id,
+                WeatherData.water_temperature.is_(None),
+                WeatherData.forecast_date >= today,
+            )
+        )
+
+        moon_phases_by_date: Dict[date, Optional[Decimal]] = {}
 
         for item in forecast_list:
             dt = datetime.fromtimestamp(item["dt"], tz=timezone.utc)
@@ -210,7 +300,9 @@ class WeatherCollectorService:
             if forecast_date not in moon_phases_by_date and lat != 0.0 and lon != 0.0:
                 try:
                     moon_data = calculate_moon_phase(forecast_date, lat, lon)
-                    moon_phases_by_date[forecast_date] = Decimal(str(round(moon_data.phase, 4)))
+                    moon_phases_by_date[forecast_date] = Decimal(
+                        str(round(moon_data.phase, 4))
+                    )
                 except Exception as e:
                     logger.warning(
                         f"Failed to calculate moon phase: {e}",
@@ -243,6 +335,23 @@ class WeatherCollectorService:
             weather_icon = weather.get("icon")
             visibility_m = item.get("visibility")
 
+            water_temp = self._get_open_meteo_hourly_value(
+                open_meteo_data, "soil_temperature_0_to_7cm",
+                forecast_date, forecast_hour,
+            )
+
+            uv_val = self._get_open_meteo_hourly_value(
+                open_meteo_data, "uv_index",
+                forecast_date, forecast_hour,
+            )
+
+            water_temp_decimal = (
+                Decimal(str(round(water_temp, 1))) if water_temp is not None else None
+            )
+            uv_decimal = (
+                Decimal(str(round(uv_val, 1))) if uv_val is not None else None
+            )
+
             weather_record = WeatherData(
                 region_id=region_id,
                 forecast_date=forecast_date,
@@ -260,13 +369,60 @@ class WeatherCollectorService:
                 weather_condition=weather_condition,
                 weather_icon=weather_icon,
                 visibility_m=visibility_m,
-                uv_index=None,
+                uv_index=uv_decimal,
                 moon_phase=moon_phases_by_date.get(forecast_date),
                 sunrise=sunrise,
                 sunset=sunset,
+                water_temperature=water_temp_decimal,
             )
 
-            self.db.add(weather_record)
+            upsert_stmt = pg_insert(WeatherData).values(
+                region_id=weather_record.region_id,
+                forecast_date=weather_record.forecast_date,
+                forecast_hour=weather_record.forecast_hour,
+                temperature=weather_record.temperature,
+                feels_like=weather_record.feels_like,
+                pressure_hpa=weather_record.pressure_hpa,
+                humidity=weather_record.humidity,
+                wind_speed=weather_record.wind_speed,
+                wind_direction=weather_record.wind_direction,
+                wind_gust=weather_record.wind_gust,
+                cloudiness=weather_record.cloudiness,
+                precipitation_mm=weather_record.precipitation_mm,
+                precipitation_probability=weather_record.precipitation_probability,
+                weather_condition=weather_record.weather_condition,
+                weather_icon=weather_record.weather_icon,
+                visibility_m=weather_record.visibility_m,
+                uv_index=weather_record.uv_index,
+                moon_phase=weather_record.moon_phase,
+                sunrise=weather_record.sunrise,
+                sunset=weather_record.sunset,
+                water_temperature=weather_record.water_temperature,
+            )
+            upsert_stmt = upsert_stmt.on_conflict_do_update(
+                constraint="weather_data_region_id_forecast_date_forecast_hour_key",
+                set_={
+                    "temperature": upsert_stmt.excluded.temperature,
+                    "feels_like": upsert_stmt.excluded.feels_like,
+                    "pressure_hpa": upsert_stmt.excluded.pressure_hpa,
+                    "humidity": upsert_stmt.excluded.humidity,
+                    "wind_speed": upsert_stmt.excluded.wind_speed,
+                    "wind_direction": upsert_stmt.excluded.wind_direction,
+                    "wind_gust": upsert_stmt.excluded.wind_gust,
+                    "cloudiness": upsert_stmt.excluded.cloudiness,
+                    "precipitation_mm": upsert_stmt.excluded.precipitation_mm,
+                    "precipitation_probability": upsert_stmt.excluded.precipitation_probability,
+                    "weather_condition": upsert_stmt.excluded.weather_condition,
+                    "weather_icon": upsert_stmt.excluded.weather_icon,
+                    "visibility_m": upsert_stmt.excluded.visibility_m,
+                    "uv_index": upsert_stmt.excluded.uv_index,
+                    "moon_phase": upsert_stmt.excluded.moon_phase,
+                    "sunrise": upsert_stmt.excluded.sunrise,
+                    "sunset": upsert_stmt.excluded.sunset,
+                    "water_temperature": upsert_stmt.excluded.water_temperature,
+                },
+            )
+            await self.db.execute(upsert_stmt)
             saved_count += 1
 
         await self.db.commit()
@@ -314,3 +470,17 @@ class WeatherCollectorService:
                 exc_info=True,
             )
             return {"status": "error", "region": region.name, "error": str(e)}
+
+    async def get_precipitation_7d(
+        self, region_id: UUID, target_date: date
+    ) -> Decimal:
+        week_ago = target_date - timedelta(days=7)
+        result = await self.db.execute(
+            select(func.coalesce(func.sum(WeatherData.precipitation_mm), 0)).where(
+                WeatherData.region_id == region_id,
+                WeatherData.forecast_date >= week_ago,
+                WeatherData.forecast_date < target_date,
+            )
+        )
+        total = result.scalar()
+        return Decimal(str(total))

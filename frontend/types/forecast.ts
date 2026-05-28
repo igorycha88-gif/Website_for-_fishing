@@ -230,3 +230,26 @@ export interface DaySummaryResponse {
   weather_icon: string | null;
   wind_speed: number | null;
 }
+
+export interface FeedbackRequest {
+  region_id: string;
+  fish_type_id: string;
+  forecast_date: string;
+  time_of_day: 'morning' | 'day' | 'evening' | 'night';
+  actual_bite: boolean;
+  bite_count?: number;
+  predicted_score?: number;
+  weather_temperature?: number;
+  weather_pressure?: number;
+  weather_wind_speed?: number;
+}
+
+export interface FeedbackResponse {
+  status: string;
+  message: string;
+}
+
+export interface AccuracyResponse {
+  total_reports: number;
+  accuracy: number | null;
+}

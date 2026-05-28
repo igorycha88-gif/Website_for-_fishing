@@ -1,7 +1,5 @@
-from uuid import UUID, uuid4
-from datetime import date, time
+from uuid import uuid4
 from decimal import Decimal
-from typing import Optional, List
 
 from sqlalchemy import (
     Column,
@@ -19,7 +17,6 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID, ARRAY, JSONB
-from sqlalchemy.orm import relationship
 
 from app.core.database import Base
 
@@ -78,6 +75,7 @@ class WeatherData(Base):
     moon_phase = Column(Numeric(3, 2))
     sunrise = Column(Time)
     sunset = Column(Time)
+    water_temperature = Column(Numeric(5, 2))
     created_at = Column(DateTime, server_default=func.now())
 
     __table_args__ = (
@@ -124,6 +122,12 @@ class FishBiteSettings(Base):
     region_ids = Column(ARRAY(PG_UUID(as_uuid=True)), default=[])
     bait_recommendations = Column(JSONB, default={})
     lure_recommendations = Column(JSONB, default={})
+    pre_spawn_days = Column(Integer, default=14)
+    post_spawn_days = Column(Integer, default=5)
+    moon_phase_preference = Column(String(20), default="neutral")
+    turbidity_sensitive = Column(Boolean, default=False)
+    uv_sensitivity = Column(Numeric(3, 2), default=Decimal("0.3"))
+    water_level_sensitivity = Column(Numeric(3, 2), default=Decimal("0.3"))
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -203,5 +207,42 @@ class UserAddedFish(Base):
             "fish_type_id",
             "region_id",
             name="uq_user_added_fish_user_region",
+        ),
+    )
+
+
+class UserCatchReport(Base):
+    __tablename__ = "user_catch_reports"
+
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    region_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("regions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    fish_type_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("fish_types.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    forecast_date = Column(Date, nullable=False)
+    time_of_day = Column(String(20), nullable=False)
+    actual_bite = Column(Boolean, nullable=False)
+    bite_count = Column(Integer, nullable=True)
+    predicted_score = Column(Integer, nullable=True)
+    weather_temperature = Column(Numeric(5, 2), nullable=True)
+    weather_pressure = Column(Integer, nullable=True)
+    weather_wind_speed = Column(Numeric(5, 2), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        CheckConstraint(
+            "time_of_day IN ('morning', 'day', 'evening', 'night')",
+            name="ck_catch_report_time_of_day",
         ),
     )

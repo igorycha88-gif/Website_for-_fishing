@@ -74,11 +74,15 @@ class TimeOfDayForecast(BaseModel):
     bite_score: float
     is_spawn_period: bool = False
     spawn_message: Optional[str] = None
+    spawn_phase: Optional[str] = None
     temperature_score: Optional[float]
     pressure_score: Optional[float]
     wind_score: Optional[float]
     moon_score: Optional[float]
     precipitation_score: Optional[float]
+    uv_score: Optional[float] = None
+    turbidity_score: Optional[float] = None
+    water_level_score: Optional[float] = None
     recommendation: Optional[str]
     best_baits: Optional[List[str]]
     best_depth: Optional[str]
