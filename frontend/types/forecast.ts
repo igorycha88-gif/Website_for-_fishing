@@ -44,14 +44,35 @@ export interface FishTypeBrief {
   is_typical_for_region?: boolean;
 }
 
+export interface CalculationDetails {
+  base: number;
+  solunar_synergy: number;
+  temp_pressure_synergy: number;
+  stability_mult: number;
+  time_adjusted: number;
+  wind_cap: number;
+  precip_cap: number;
+  uv_cap: number;
+  turbidity_cap: number;
+  water_level_cap: number;
+  phase_mult: number;
+  season_mult: number;
+}
+
 export interface TimeOfDayForecast {
   time_of_day: 'morning' | 'day' | 'evening' | 'night';
   bite_score: number;
+  is_spawn_period?: boolean;
+  spawn_message?: string | null;
+  spawn_phase?: string | null;
   temperature_score: number | null;
   pressure_score: number | null;
   wind_score: number | null;
   moon_score: number | null;
   precipitation_score: number | null;
+  uv_score?: number | null;
+  turbidity_score?: number | null;
+  water_level_score?: number | null;
   recommendation: string | null;
   best_baits: string[] | null;
   best_depth: string | null;
@@ -62,6 +83,7 @@ export interface TimeOfDayForecast {
   pressure_trend_direction: 'rising' | 'falling' | 'stable' | null;
   pressure_stability: number | null;
   is_solunar_peak: boolean | null;
+  calculation_details: CalculationDetails | null;
 }
 
 export interface FishForecast {

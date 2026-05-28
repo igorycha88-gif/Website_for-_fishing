@@ -69,6 +69,21 @@ class FishTypeBrief(BaseModel):
     is_typical_for_region: bool = True
 
 
+class CalculationDetails(BaseModel):
+    base: float
+    solunar_synergy: float
+    temp_pressure_synergy: float
+    stability_mult: float
+    time_adjusted: float
+    wind_cap: float
+    precip_cap: float
+    uv_cap: float
+    turbidity_cap: float
+    water_level_cap: float
+    phase_mult: float
+    season_mult: float
+
+
 class TimeOfDayForecast(BaseModel):
     time_of_day: str
     bite_score: float
@@ -93,6 +108,7 @@ class TimeOfDayForecast(BaseModel):
     pressure_trend_direction: Optional[str] = None
     pressure_stability: Optional[float] = None
     is_solunar_peak: Optional[bool] = None
+    calculation_details: Optional[CalculationDetails] = None
 
 
 class FishForecastResponse(BaseModel):

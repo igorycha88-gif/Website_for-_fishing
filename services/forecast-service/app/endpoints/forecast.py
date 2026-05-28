@@ -519,6 +519,7 @@ async def get_forecast(
                             pressure_trend_direction=pressure_trend_data.direction if pressure_trend_data else None,
                             pressure_stability=round(pressure_trend_data.stability, 2) if pressure_trend_data else None,
                             is_solunar_peak=avg_weather.is_solunar_major or avg_weather.is_solunar_minor,
+                            calculation_details=calc_result.get("calculation_details"),
                         )
                     )
 
@@ -674,6 +675,7 @@ async def get_forecast(
                             pressure_trend_direction=pressure_trend_data.direction if pressure_trend_data else None,
                             pressure_stability=round(pressure_trend_data.stability, 2) if pressure_trend_data else None,
                             is_solunar_peak=avg_weather.is_solunar_major or avg_weather.is_solunar_minor,
+                            calculation_details=calc_result.get("calculation_details"),
                         )
                     )
 

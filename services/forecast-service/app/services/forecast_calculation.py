@@ -687,6 +687,7 @@ def calculate_bite_score(
             "turbidity_score": None,
             "water_level_score": None,
             "season_multiplier": 0,
+            "calculation_details": None,
         }
 
     time_of_day = get_time_of_day_dynamic(hour, weather.sunrise, weather.sunset)
@@ -768,6 +769,20 @@ def calculate_bite_score(
         "turbidity_score": round(turbidity_score, 1),
         "water_level_score": round(water_level_score, 1),
         "season_multiplier": season_mult,
+        "calculation_details": {
+            "base": round(base, 2),
+            "solunar_synergy": round(solunar_synergy, 3),
+            "temp_pressure_synergy": round(temp_pressure_synergy, 3),
+            "stability_mult": round(stability_mult, 3),
+            "time_adjusted": round(time_adjusted, 1),
+            "wind_cap": round(wind_cap, 3),
+            "precip_cap": round(precip_cap, 3),
+            "uv_cap": round(uv_cap, 3),
+            "turbidity_cap": round(turbidity_cap, 3),
+            "water_level_cap": round(water_level_cap, 3),
+            "phase_mult": round(phase_mult, 3),
+            "season_mult": round(season_mult, 3),
+        },
     }
 
 

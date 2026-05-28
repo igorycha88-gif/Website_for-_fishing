@@ -42,6 +42,7 @@ import {
   formatSolunarPeriods,
   DaySummaryResponse,
 } from "@/types/forecast";
+import ForecastFactorBreakdown from "@/components/forecast/ForecastFactorBreakdown";
 
 function convertTimeFromUtc(timeStr: string | null, timezone: string | undefined): string | null {
   if (!timeStr || !timezone) return timeStr;
@@ -795,6 +796,12 @@ export default function FishingForecast({
                             💡 {fishForecast.forecasts[0].recommendation}
                           </div>
                         )}
+
+                        <ForecastFactorBreakdown
+                          forecasts={fishForecast.forecasts}
+                          weather={forecast?.weather || null}
+                          fishName={fishForecast.fish_type.name || "рыбы"}
+                        />
                       </motion.div>
                     )}
                   </motion.div>

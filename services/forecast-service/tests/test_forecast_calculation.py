@@ -1941,3 +1941,46 @@ class TestBiteScoreV5:
         assert "water_level_score" in result
         assert "spawn_phase" in result
         assert result["spawn_phase"] == "normal"
+
+    def test_calculation_details_returned(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("3"),
+            moon_phase=Decimal("0.0"),
+            sunrise=time(7, 0),
+            sunset=time(18, 0),
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
+        )
+        assert "calculation_details" in result
+        details = result["calculation_details"]
+        assert details is not None
+        assert "base" in details
+        assert "solunar_synergy" in details
+        assert "temp_pressure_synergy" in details
+        assert "stability_mult" in details
+        assert "time_adjusted" in details
+        assert "wind_cap" in details
+        assert "precip_cap" in details
+        assert "uv_cap" in details
+        assert "turbidity_cap" in details
+        assert "water_level_cap" in details
+        assert "phase_mult" in details
+        assert "season_mult" in details
+        assert 0 <= details["base"] <= 100
+        assert details["wind_cap"] >= 0
+        assert details["precip_cap"] >= 0
+
+    def test_calculation_details_none_on_spawn(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("3"),
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=3, check_date=date(2025, 3, 15)
+        )
+        if result["is_spawn_period"]:
+            assert result["calculation_details"] is None
