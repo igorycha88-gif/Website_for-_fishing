@@ -2,10 +2,8 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir uv
-
 COPY requirements.txt .
-RUN uv pip install --system --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --timeout 120 -r requirements.txt
 
 FROM python:3.12-slim AS runtime
 

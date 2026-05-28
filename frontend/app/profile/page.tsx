@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { User, Mail, CheckCircle, XCircle, MapPin, Settings, ShoppingCart, Package, Bell, FileText, Calendar } from "lucide-react";
+import { User, Mail, CheckCircle, XCircle, MapPin, Settings, ShoppingCart, Package, Bell, FileText, Calendar, Fish } from "lucide-react";
 // SHOP-HIDE: ShoppingCart, Package, Calendar — скрыто до появления юр. лица
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
@@ -15,15 +15,17 @@ import OrdersTab from "./components/OrdersTab";
 import NotificationsTab from "./components/NotificationsTab";
 import ReportsTab from "./components/ReportsTab";
 import BookingsTab from "./components/BookingsTab";
+import ForecastTab from "./components/ForecastTab";
 // SHOP-HIDE: скрыто до появления юр. лица — CartTab, OrdersTab, BookingsTab
 import { API_ENDPOINTS } from "@/app/lib/api";
 
-type TabType = "profile" | "settings" | "my-places" | "cart" | "orders" | "notifications" | "reports" | "bookings";
+type TabType = "profile" | "settings" | "my-places" | "forecast" | "cart" | "orders" | "notifications" | "reports" | "bookings";
 // SHOP-HIDE: скрыто до появления юр. лица — "cart" | "orders" | "bookings"
 
 const tabs = [
   { id: "profile" as TabType, label: "Профиль", icon: User },
   { id: "my-places" as TabType, label: "Мои места", icon: MapPin },
+  { id: "forecast" as TabType, label: "Прогноз клева", icon: Fish },
   // SHOP-HIDE: скрыто до появления юр. лица
   // { id: "cart" as TabType, label: "Корзина", icon: ShoppingCart },
   // { id: "orders" as TabType, label: "Заказы", icon: Package },
@@ -102,6 +104,8 @@ export default function ProfilePage() {
         return <SettingsTab />;
       case "my-places":
         return <MyPlacesTab />;
+      case "forecast":
+        return <ForecastTab />;
       // SHOP-HIDE: скрыто до появления юр. лица
       case "cart":
         return <CartTab />;

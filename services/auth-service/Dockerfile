@@ -3,12 +3,9 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir uv
-
 COPY requirements.txt .
-RUN uv pip install --system --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --timeout 600 --retries 10 --index-url https://pypi.org/simple/ --trusted-host pypi.org -r requirements.txt
 
-# Stage 2: Runtime
 FROM python:3.12-slim AS runtime
 
 LABEL org.opencontainers.image.title="FishMap Auth Service"

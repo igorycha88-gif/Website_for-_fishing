@@ -1,0 +1,21 @@
+{
+  "origins": [],
+  "cookies": [
+    {
+      "name": "access_token",
+      "value": "test_token_value",
+      "domain": "localhost",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "localStorage": [
+    {
+      "name": "access_token",
+      "value": "test_token_value"
+    }
+  ]
+}

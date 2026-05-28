@@ -1,0 +1,137 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        working-directory: ./frontend
+        run: npx playwright install --with-deps
+
+      - name: Run E2E tests
+        working-directory: ./frontend
+        run: npm run test:e2e
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 30
+
+      - name: Upload test screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-screenshots
+          path: frontend/test-results/
+          retention-days: 30
+
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: fishing_test_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: services/*/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          pip install -r services/auth-service/requirements.txt
+          pip install -r services/places-service/requirements.txt
+          pip install -r services/email-service/requirements.txt
+
+      - name: Run auth-service tests
+        working-directory: ./services/auth-service
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres_password@localhost:5432/fishing_test_db
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test_secret_key_for_ci_cd_environment
+          ALGORITHM: HS256
+          ACCESS_TOKEN_EXPIRE_MINUTES: 30
+          REFRESH_TOKEN_EXPIRE_DAYS: 7
+          EMAIL_SERVICE_URL: http://localhost:8005
+        run: |
+          pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
+
+      - name: Run places-service tests
+        working-directory: ./services/places-service
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:postgres_password@localhost:5432/fishing_test_db
+          REDIS_URL: redis://localhost:6379/0
+          MAPBOX_API_KEY: test_key
+        run: |
+          pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
+
+      - name: Run email-service tests
+        working-directory: ./services/email-service
+        env:
+          REDIS_URL: redis://localhost:6379/0
+          SMTP_HOST: smtp.yandex.ru
+          SMTP_PORT: 465
+          SMTP_USER: test@example.com
+          SMTP_PASSWORD: test_password
+          SMTP_FROM_EMAIL: test@example.com
+          SMTP_FROM_NAME: Test
+        run: |
+          pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: services/*/coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false

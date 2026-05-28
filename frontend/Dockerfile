@@ -1,8 +1,8 @@
 FROM node:20-alpine AS base
+RUN apk add --no-cache libc6-compat || true
 
 FROM base AS deps
 WORKDIR /app
-RUN apk add --no-cache libc6-compat
 COPY package.json ./
 RUN npm install --platform=linux --arch=arm64 --prefer-offline --no-audit --no-fund --legacy-peer-deps
 
