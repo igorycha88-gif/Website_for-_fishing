@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi_limiter.depends import RateLimiter
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from datetime import timedelta, datetime
 import httpx
 import secrets
@@ -17,7 +16,7 @@ from app.core.security import (
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.logging_config import get_logger
-from app.core.exceptions import EmailServiceUnavailableError
+
 from app.core.token_blacklist import get_token_blacklist
 from app.core.csrf_protection import get_csrf_protection
 from app.core.error_utils import GenericErrors, add_timing_jitter
@@ -34,10 +33,8 @@ from app.schemas.auth import (
 from app.schemas.email import EmailVerificationResponse, MessageResponse, LogoutResponse
 from app.crud.user import UserCRUD
 from app.crud.refresh_token import RefreshTokenCRUD
-from app.core.security import verify_password, get_password_hash
+from app.core.security import verify_password
 from app.crud.email_verification_code import EmailVerificationCodeCRUD
-from app.crud.password_reset_token import PasswordResetTokenCRUD
-from app.models.password_reset_token import PasswordResetToken
 
 router = APIRouter()
 security = HTTPBearer()
@@ -62,26 +59,61 @@ async def register(
     existing_email = await user_crud.get_by_email(request.email)
     existing_username = await user_crud.get_by_username(request.username)
 
-    if existing_email or existing_username:
-        reason = "duplicate_email" if existing_email else "duplicate_username"
+    if existing_email:
+        if existing_email.is_verified:
+            logger.warning(
+                "Registration failed - email already verified",
+                email=request.email,
+                ip_address=client_ip,
+            )
+            raise GenericErrors.email_already_registered(
+                email=request.email, ip=client_ip
+            )
+
+        if existing_username and str(existing_username.id) != str(existing_email.id):
+            logger.warning(
+                "Registration failed - username taken by another user",
+                email=request.email,
+                username=request.username,
+                ip_address=client_ip,
+            )
+            await add_timing_jitter()
+            raise GenericErrors.registration_failed(
+                email=request.email, username=request.username, ip=client_ip, reason="duplicate_username"
+            )
+
+        logger.info(
+            "Re-registration for unverified email",
+            email=request.email,
+            old_username=existing_email.username,
+            new_username=request.username,
+        )
+        password_hash = get_password_hash(request.password)
+        await user_crud.update(
+            str(existing_email.id),
+            username=request.username,
+            password_hash=password_hash,
+        )
+        user = existing_email
+    elif existing_username:
         logger.warning(
-            "Registration failed - duplicate credentials",
+            "Registration failed - duplicate username",
             email=request.email,
             username=request.username,
-            error_type=reason,
             ip_address=client_ip,
         )
         await add_timing_jitter()
         raise GenericErrors.registration_failed(
-            email=request.email, username=request.username, ip=client_ip, reason=reason
+            email=request.email, username=request.username, ip=client_ip, reason="duplicate_username"
         )
+    else:
+        password_hash = get_password_hash(request.password)
+        user = await user_crud.create(
+            email=request.email, username=request.username, password_hash=password_hash
+        )
+        logger.info("User created successfully", user_id=str(user.id), email=request.email)
 
-    password_hash = get_password_hash(request.password)
-    user = await user_crud.create(
-        email=request.email, username=request.username, password_hash=password_hash
-    )
-    logger.info("User created successfully", user_id=str(user.id), email=request.email)
-
+    email_sent = False
     if settings.ENABLE_EMAIL_SENDING:
         try:
             async with httpx.AsyncClient() as client:
@@ -111,23 +143,22 @@ async def register(
                     timeout=30.0,
                 )
                 logger.info("Email sent successfully", email=request.email)
+                email_sent = True
         except httpx.HTTPStatusError as e:
             logger.error(
-                "Email service returned error",
+                "Email service returned error, using local fallback",
                 email=request.email,
                 status_code=e.response.status_code,
                 error=str(e),
                 exc_info=True,
             )
-            raise EmailServiceUnavailableError()
         except Exception as e:
-            logger.critical(
-                "Email service unavailable during registration",
+            logger.warning(
+                "Email service unavailable during registration, using local fallback",
                 email=request.email,
                 error=str(e),
                 exc_info=True,
             )
-            raise EmailServiceUnavailableError()
     else:
         if settings.ENVIRONMENT == "development":
             if request.email.endswith(f"@{settings.DEV_EMAIL_DOMAIN}"):
@@ -137,21 +168,29 @@ async def register(
                     email=request.email,
                     code=code,
                 )
+                email_sent = True
             else:
                 logger.warning(
                     "Dev mode: email not in whitelist",
                     email=request.email,
                     required_domain=settings.DEV_EMAIL_DOMAIN,
                 )
-                raise EmailServiceUnavailableError()
         else:
             logger.critical(
                 "Email sending disabled in production mode",
                 email=request.email,
             )
-            raise EmailServiceUnavailableError()
+
+    if not email_sent:
+        code = secrets.token_hex(3).upper()
+        logger.info(
+            "Generated local verification code (email not sent)",
+            email=request.email,
+            code=code,
+        )
 
     email_crud = EmailVerificationCodeCRUD(db)
+    await email_crud.delete_by_email(request.email)
     await email_crud.create(request.email, code, settings.EMAIL_CODE_EXPIRE_MINUTES)
     logger.info(
         "Verification code saved",
@@ -161,6 +200,84 @@ async def register(
 
     return MessageResponse(
         message="Registration successful. Please check your email for verification code."
+    )
+
+
+@router.post(
+    "/resend-verification",
+    response_model=MessageResponse,
+    dependencies=[Depends(RateLimiter(times=3, seconds=60))]
+    if settings.RATE_LIMIT_ENABLED
+    else [],
+)
+async def resend_verification(
+    request_body: ResetPasswordRequest, req: Request, db: AsyncSession = Depends(get_db)
+):
+    logger.info("Resend verification code request", email=request_body.email)
+    user_crud = UserCRUD(db)
+    email_crud = EmailVerificationCodeCRUD(db)
+
+    user = await user_crud.get_by_email(request_body.email)
+    if not user:
+        logger.warning("Resend verification - email not found", email=request_body.email)
+        return MessageResponse(
+            message="Если этот email зарегистрирован, код подтверждения будет отправлен"
+        )
+
+    if user.is_verified:
+        logger.info("Resend verification - already verified", email=request_body.email)
+        return MessageResponse(
+            message="Если этот email зарегистрирован, код подтверждения будет отправлен"
+        )
+
+    await email_crud.delete_by_email(request_body.email)
+
+    email_sent = False
+    code = secrets.token_hex(3).upper()
+
+    if settings.ENABLE_EMAIL_SENDING:
+        try:
+            async with httpx.AsyncClient() as client:
+                api_headers = {"X-API-Key": settings.EMAIL_SERVICE_API_KEY}
+                response = await client.post(
+                    f"{settings.EMAIL_SERVICE_URL}/api/v1/email/generate-code",
+                    headers=api_headers,
+                    timeout=10.0,
+                )
+                response.raise_for_status()
+                code = response.json()["code"]
+
+                await client.post(
+                    f"{settings.EMAIL_SERVICE_URL}/api/v1/email/send",
+                    json={
+                        "to_email": request_body.email,
+                        "verification_code": code,
+                        "username": user.username,
+                    },
+                    headers=api_headers,
+                    timeout=30.0,
+                )
+                email_sent = True
+        except Exception as e:
+            logger.warning(
+                "Email service unavailable during resend verification",
+                email=request_body.email,
+                error=str(e),
+            )
+
+    if not email_sent:
+        code = secrets.token_hex(3).upper()
+        logger.info(
+            "Generated local verification code for resend",
+            email=request_body.email,
+            code=code,
+        )
+
+    await email_crud.create(request_body.email, code, settings.EMAIL_CODE_EXPIRE_MINUTES)
+    logger.info("Verification code resent", email=request_body.email)
+
+    return MessageResponse(
+        message="Код подтверждения отправлен повторно"
     )
 
 
@@ -618,7 +735,6 @@ async def request_password_reset(
 ):
     logger.info("Password reset request", email=request_body.email)
     user_crud = UserCRUD(db)
-    password_reset_token_crud = PasswordResetTokenCRUD(db)
 
     user = await user_crud.get_by_email(request_body.email)
     if not user:
@@ -626,49 +742,28 @@ async def request_password_reset(
             "Password reset failed - email not found", email=request_body.email
         )
         return MessageResponse(
-            message="Если этот email зарегистрирован, инструкция по сбросу пароля будет отправлена"
+            message="Если этот email зарегистрирован, код подтверждения будет отправлен"
         )
 
-    reset_token = secrets.token_urlsafe(48)
-    token_hash = get_password_hash(reset_token)
-
-    client_ip = req.client.host if req.client else None
-    user_agent = req.headers.get("user-agent", None)
-
-    await password_reset_token_crud.invalidate_user_tokens(str(user.id))
-
-    expires_at = datetime.utcnow() + timedelta(hours=1)
-    await password_reset_token_crud.create(
-        user_id=str(user.id),
-        token_hash=token_hash,
-        expires_at=expires_at,
-        ip_address=client_ip,
-        user_agent=user_agent,
-    )
-
-    logger.info(
-        "Password reset token generated", user_id=str(user.id), email=request_body.email
-    )
+    email_sent = False
+    code = secrets.token_hex(3).upper()
 
     if settings.ENABLE_EMAIL_SENDING:
         try:
             async with httpx.AsyncClient() as client:
                 api_headers = {"X-API-Key": settings.EMAIL_SERVICE_API_KEY}
-                reset_link = (
-                    f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
-                )
-
                 await client.post(
                     f"{settings.EMAIL_SERVICE_URL}/api/v1/email/send",
                     json={
                         "to_email": user.email,
-                        "verification_code": reset_link,
+                        "verification_code": code,
                         "username": user.username,
                     },
                     headers=api_headers,
                     timeout=30.0,
                 )
-                logger.info("Password reset email sent", email=user.email)
+                logger.info("Password reset code email sent", email=user.email)
+                email_sent = True
         except Exception as e:
             logger.error(
                 "Failed to send password reset email",
@@ -676,9 +771,33 @@ async def request_password_reset(
                 error=str(e),
                 exc_info=True,
             )
+    else:
+        if settings.ENVIRONMENT == "development":
+            logger.info(
+                "Dev mode: generated password reset code",
+                email=request_body.email,
+                code=code,
+            )
+            email_sent = True
+
+    if not email_sent:
+        logger.info(
+            "Generated local reset code (email not sent)",
+            email=request_body.email,
+            code=code,
+        )
+
+    email_crud = EmailVerificationCodeCRUD(db)
+    await email_crud.delete_by_email(request_body.email)
+    await email_crud.create(request_body.email, code, settings.EMAIL_CODE_EXPIRE_MINUTES)
+    logger.info(
+        "Password reset code saved",
+        email=request_body.email,
+        user_id=str(user.id),
+    )
 
     return MessageResponse(
-        message="Если этот email зарегистрирован, инструкция по сбросу пароля будет отправлена"
+        message="Если этот email зарегистрирован, код подтверждения будет отправлен"
     )
 
 
@@ -686,59 +805,46 @@ async def request_password_reset(
 async def confirm_password_reset(
     request_body: ResetPasswordConfirm, req: Request, db: AsyncSession = Depends(get_db)
 ):
-    logger.info("Password reset confirmation attempt")
+    logger.info("Password reset confirmation attempt", email=request_body.email)
 
-    if len(request_body.token) != 64:
-        logger.warning("Password reset failed - invalid token length")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
-        )
+    client_ip = req.client.host if req.client else None
 
-    password_reset_token_crud = PasswordResetTokenCRUD(db)
+    email_crud = EmailVerificationCodeCRUD(db)
+    verification_code = await email_crud.get_valid_code(request_body.email, request_body.code)
 
-    stored_tokens = await db.execute(
-        select(PasswordResetToken).where(PasswordResetToken.used == False)
-    )
-    stored_tokens = stored_tokens.scalars().all()
+    if not verification_code:
+        existing_code = await email_crud.get_by_email(request_body.email)
+        await email_crud.increment_attempts(request_body.email)
+        attempts = existing_code.attempts + 1 if existing_code else 1
 
-    matching_token = None
-    for stored_token in stored_tokens:
-        if verify_password(request_body.token, stored_token.token_hash):
-            matching_token = stored_token
-            break
-
-    if not matching_token:
-        logger.warning("Password reset failed - invalid token")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
-        )
-
-    if matching_token.expires_at < datetime.utcnow():
         logger.warning(
-            "Password reset failed - token expired", token_id=str(matching_token.id)
+            "Password reset failed - invalid code",
+            email=request_body.email,
+            ip_address=client_ip,
+            attempts=attempts,
         )
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
+
+        if attempts >= 3:
+            await email_crud.delete_by_email(request_body.email)
+            raise GenericErrors.verification_code_expired()
+
+        raise GenericErrors.verification_failed(
+            email=request_body.email, ip=client_ip, attempts=attempts
         )
 
     user_crud = UserCRUD(db)
-    user = await user_crud.get_by_id(str(matching_token.user_id))
+    user = await user_crud.get_by_email(request_body.email)
 
     if not user:
         logger.warning(
             "Password reset failed - user not found",
-            user_id=str(matching_token.user_id),
+            email=request_body.email,
         )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
-    client_ip = req.client.host if req.client else None
-    user_agent = req.headers.get("user-agent", None)
-
-    await password_reset_token_crud.mark_as_used(
-        token_id=matching_token.id, ip_address=client_ip, user_agent=user_agent
-    )
+    await email_crud.delete_by_email(request_body.email)
 
     password_hash = get_password_hash(request_body.new_password)
     await user_crud.update_password(str(user.id), password_hash)
@@ -754,29 +860,5 @@ async def confirm_password_reset(
         logger.info("CSRF token invalidated after password reset", user_id=str(user.id))
     except Exception as e:
         logger.warning("Failed to invalidate CSRF token", error=str(e))
-
-    if settings.ENABLE_EMAIL_SENDING:
-        try:
-            async with httpx.AsyncClient() as client:
-                api_headers = {"X-API-Key": settings.EMAIL_SERVICE_API_KEY}
-
-                await client.post(
-                    f"{settings.EMAIL_SERVICE_URL}/api/v1/email/send",
-                    json={
-                        "to_email": user.email,
-                        "verification_code": f"Password changed at {datetime.utcnow().isoformat()} from IP: {client_ip}",
-                        "username": user.username,
-                    },
-                    headers=api_headers,
-                    timeout=30.0,
-                )
-                logger.info("Password changed notification sent", email=user.email)
-        except Exception as e:
-            logger.error(
-                "Failed to send password changed notification",
-                email=user.email,
-                error=str(e),
-                exc_info=True,
-            )
 
     return MessageResponse(message="Пароль успешно изменен")

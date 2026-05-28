@@ -22,6 +22,7 @@ export default function RegisterPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [success, setSuccess] = useState("");
   
   const { isLimited, remainingSeconds, startLimit } = useRateLimit();
@@ -33,6 +34,7 @@ export default function RegisterPage() {
     
     setLoading(true);
     setError("");
+    setErrorCode("");
     setSuccess("");
 
     try {
@@ -54,6 +56,7 @@ export default function RegisterPage() {
       if (!response.ok) {
         const errorCode = data.detail?.code || "REGISTRATION_ERROR";
         setError(mapErrorToMessage(errorCode));
+        setErrorCode(errorCode);
         return;
       }
 
@@ -107,6 +110,13 @@ export default function RegisterPage() {
         {error && (
           <div className="bg-accent-orange/10 text-accent-orange px-4 py-3 rounded-xl text-sm mb-4">
             {error}
+            {errorCode === "EMAIL_ALREADY_REGISTERED" && (
+              <div className="mt-2">
+                <Link href="/reset-password" className="text-primary-sea font-medium hover:underline">
+                  Сбросить пароль
+                </Link>
+              </div>
+            )}
           </div>
         )}
 

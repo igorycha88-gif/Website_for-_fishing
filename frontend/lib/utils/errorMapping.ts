@@ -1,5 +1,6 @@
 export const errorMessages: Record<string, string> = {
   REGISTRATION_FAILED: "Не удалось завершить регистрацию. Попробуйте другие данные.",
+  EMAIL_ALREADY_REGISTERED: "Этот email уже зарегистрирован и подтверждён. Воспользуйтесь сбросом пароля.",
   
   INVALID_CODE: "Неверный код подтверждения. Попробуйте еще раз.",
   VERIFICATION_CODE_EXPIRED: "Превышено количество попыток. Запросите новый код.",
@@ -17,4 +18,8 @@ export const errorMessages: Record<string, string> = {
 
 export function mapErrorToMessage(errorCode: string): string {
   return errorMessages[errorCode] || errorMessages.INTERNAL_ERROR;
+}
+
+export function isErrorCode(errorCode: string, ...codes: string[]): boolean {
+  return codes.includes(errorCode);
 }

@@ -132,6 +132,24 @@ class TestGenericErrors:
         assert error.detail["code"] == "VERIFICATION_CODE_EXPIRED"
         assert error.detail["message"] == "Too many attempts. Please request a new verification code."
 
+    def test_email_already_registered(self):
+        error = GenericErrors.email_already_registered(
+            email="test@example.com",
+            ip="192.168.1.1"
+        )
+        
+        assert isinstance(error, HTTPException)
+        assert error.status_code == status.HTTP_400_BAD_REQUEST
+        assert error.detail["code"] == "EMAIL_ALREADY_REGISTERED"
+
+    def test_email_already_registered_with_none_ip(self):
+        error = GenericErrors.email_already_registered(
+            email="test@example.com",
+            ip=None
+        )
+        
+        assert error.detail["code"] == "EMAIL_ALREADY_REGISTERED"
+
 
 class TestAddTimingJitter:
     @pytest.mark.asyncio
