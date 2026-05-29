@@ -13,6 +13,7 @@ import {
   Droplets,
   AlertTriangle,
   Sparkles,
+  ChevronDown,
 } from "lucide-react";
 import {
   TimeOfDayForecast,
@@ -320,6 +321,7 @@ function getBaseScoreBarColor(score: number): string {
 }
 
 function CalculationFormula({ details, biteScore }: { details: CalculationDetails; biteScore: number }) {
+  const [expanded, setExpanded] = useState(false);
   const steps: MultiplierStep[] = [
     {
       label: "База (темп. × давл.)",
@@ -436,35 +438,56 @@ function CalculationFormula({ details, biteScore }: { details: CalculationDetail
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ delay: 0.25 }}
-      className="mt-2 p-2 bg-gray-50 rounded-lg border border-gray-200"
+      className="mt-2 bg-gray-50 rounded-lg border border-gray-200 overflow-hidden"
     >
-      <div className="text-[10px] font-medium text-gray-500 mb-2 flex items-center gap-1">
-        <span>🔢</span> Формула расчёта
-      </div>
-      <div className="space-y-1">
-        {steps.map((step, idx) => (
-          <div key={idx} className="flex items-center gap-2 text-[10px]">
-            <span className="text-gray-500 min-w-[100px] truncate" title={step.description}>
-              {step.label}
-            </span>
-            <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full ${step.barClass}`}
-                style={{ width: `${step.barPercent}%` }}
-              />
-            </div>
-            <span className={`font-semibold min-w-[36px] text-right ${step.colorClass}`}>
-              {step.displayValue}
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-1.5 pt-1.5 border-t border-gray-200 flex items-center justify-between">
-        <span className="text-[10px] font-medium text-gray-600">Итого</span>
-        <span className={`text-xs font-bold ${getBiteScoreTextColor(biteScore)}`}>
-          {Math.round(biteScore)}%
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full p-2 flex items-center justify-between text-[10px] font-medium text-gray-500 hover:bg-gray-100 transition-colors"
+      >
+        <span className="flex items-center gap-1">
+          <span>🔢</span> Формула расчёта
         </span>
-      </div>
+        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`} />
+      </button>
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-2 pb-2">
+              <div className="space-y-1">
+                {steps.map((step, idx) => (
+                  <div key={idx} className="flex items-center gap-2 text-[10px]">
+                    <span className="text-gray-500 min-w-[100px] truncate" title={step.description}>
+                      {step.label}
+                    </span>
+                    <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${step.barClass}`}
+                        style={{ width: `${step.barPercent}%` }}
+                      />
+                    </div>
+                    <span className={`font-semibold min-w-[36px] text-right ${step.colorClass}`}>
+                      {step.displayValue}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-1.5 pt-1.5 border-t border-gray-200 flex items-center justify-between">
+                <span className="text-[10px] font-medium text-gray-600">Итого</span>
+                <span className={`text-xs font-bold ${getBiteScoreTextColor(biteScore)}`}>
+                  {Math.round(biteScore)}%
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
