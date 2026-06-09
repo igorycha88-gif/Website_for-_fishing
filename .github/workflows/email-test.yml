@@ -3,8 +3,48 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: test_fishing_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user -d test_fishing_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
-      - name: Test email flow
-        run: |
-          COMPOSE_PROJECT_NAME=fishmap docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        working-directory: services/email-service
+        run: pip install -r requirements.txt
+      - name: Run tests
+        working-directory: services/email-service
+        env:
+          DATABASE_URL: postgresql+asyncpg://test_user:test_password@localhost:5432/test_fishing_db
+          REDIS_URL: redis://localhost:6379/0
+          SMTP_HOST: smtp.example.com
+          SMTP_PORT: 587
+          SMTP_USER: test@example.com
+          SMTP_PASSWORD: test_password
+          SMTP_FROM_EMAIL: noreply@test.com
+          SMTP_FROM_NAME: TestEmailService
+          ENABLE_EMAIL_SENDING: false
+          EMAIL_SERVICE_API_KEY: test-api-key
+        run: python -m pytest tests/ -v
