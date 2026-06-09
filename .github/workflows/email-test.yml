@@ -46,5 +46,5 @@ jobs:
           SMTP_FROM_EMAIL: noreply@test.com
           SMTP_FROM_NAME: TestEmailService
           ENABLE_EMAIL_SENDING: false
-          EMAIL_SERVICE_API_KEY: test-api-key
+          EMAIL_SERVICE_API_KEY: test-api-key-that-is-at-least-32-characters-long
         run: python -m pytest tests/ -v
