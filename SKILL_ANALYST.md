@@ -352,6 +352,47 @@ TASK-{CATEGORY}-{NUMBER}
 4. В каких условиях проявляется?
 5. Критичность для бизнеса?
 
+### Для рефакторинга
+1. Что не так с текущей реализацией?
+2. Какой результат ожидается?
+3. Есть ли регрессионные риски?
+4. Как проверить что ничего не сломалось?
+
+---
+
+## Форма бизнес-задачи
+
+Пользователь может заполнить форму из `BUSINESS_TASK_FORM.md` для постановки
+задачи. Аналитик использует эту форму как входные данные и дополняет
+недостающую информацию через вопросы.
+
+---
+
+## Диаграммы (Mermaid)
+
+### Sequence Diagram (пример: создание места)
+```mermaid
+sequenceDiagram
+    actor User
+    participant Frontend
+    participant Auth as Auth Service
+    participant Places as Places Service
+    participant DB as PostgreSQL
+    participant Redis
+
+    User->>Frontend: Заполнить форму места
+    Frontend->>Auth: Проверить JWT token
+    Auth-->>Frontend: Token valid (user_id)
+    Frontend->>Places: POST /api/v1/places
+    Places->>Redis: Проверить кэш
+    Redis-->>Places: Cache miss
+    Places->>DB: INSERT INTO places
+    DB-->>Places: OK (place_id)
+    Places->>Redis: Обновить кэш
+    Places-->>Frontend: 201 Created
+    Frontend-->>User: Место создано
+```
+
 ---
 
 *Скилл создан для подготовки требований, которые AI-разработчик может реализовать автономно в рамках конвейера AI-команды FishMap.*

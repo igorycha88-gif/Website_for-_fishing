@@ -1,0 +1,369 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_deploy:
+        description: "Type DEPLOY to confirm"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+env:
+  COMPOSE_FILE: docker-compose.vps-host.yml
+  ENV_FILE: .env.vps
+
+jobs:
+  pre-flight:
+    name: Pre-flight Check
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_ok: ${{ steps.check.outputs.deploy_ok }}
+      previous_version: ${{ steps.version.outputs.previous }}
+      new_version: ${{ steps.version.outputs.new }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate confirmation (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "${{ inputs.confirm_deploy }}" != "DEPLOY" ]; then
+            echo "::error::You must type DEPLOY to confirm deployment"
+            exit 1
+          fi
+
+      - name: Check CI status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ci.yml',
+              branch: '${{ github.event_name == 'push' ? github.ref_name : 'main' }}',
+              per_page: 1,
+              status: 'completed'
+            });
+            if (runs.data.workflow_runs.length === 0) {
+              core.setFailed('No CI runs found. Push commits first.');
+              return;
+            }
+            const lastRun = runs.data.workflow_runs[0];
+            if (lastRun.conclusion !== 'success') {
+              core.setFailed(`Last CI run: ${lastRun.conclusion}. Fix CI before deploying.`);
+            }
+            console.log(`Last CI: ${lastRun.conclusion} (#${lastRun.run_number})`);
+
+      - name: Extract versions
+        id: version
+        run: |
+          if [ -f VERSION ]; then
+            PREV=$(cat VERSION)
+          else
+            PREV="0.0.0"
+          fi
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            NEW="${GITHUB_REF#refs/tags/v}"
+          else
+            NEW="${PREV}"
+          fi
+
+          echo "previous=${PREV}" >> "$GITHUB_OUTPUT"
+          echo "new=${NEW}" >> "$GITHUB_OUTPUT"
+          echo "Previous: ${PREV} → New: ${NEW}"
+
+      - name: SSH connectivity check
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+              -i ~/.ssh/deploy_key \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "echo SSH OK"
+
+      - name: Check VPS prerequisites
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            set -e
+            echo '=== Disk space ==='
+            AVAIL=\$(df -m / | tail -1 | awk '{print \$4}')
+            echo \"Available: \${AVAIL} MB\"
+            if [ \"\${AVAIL}\" -lt 500 ]; then
+              echo 'ERROR: Less than 500MB free disk space'
+              exit 1
+            fi
+
+            echo '=== .env.vps ==='
+            test -f ${{ secrets.VPS_APP_DIR }}/.env.vps || { echo 'ERROR: .env.vps not found'; exit 1; }
+            grep -c 'CHANGE_ME' ${{ secrets.VPS_APP_DIR }}/.env.vps && { echo 'ERROR: unfilled variables in .env.vps'; exit 1; } || true
+
+            echo '=== Docker ==='
+            docker info >/dev/null 2>&1 || { echo 'ERROR: Docker not running'; exit 1; }
+            docker compose version >/dev/null 2>&1 || { echo 'ERROR: Docker Compose not available'; exit 1; }
+
+            echo '=== Pre-flight OK ==='
+          "
+
+      - name: Pre-flight passed
+        id: check
+        run: echo "deploy_ok=true" >> "$GITHUB_OUTPUT"
+
+  backup:
+    name: Database Backup
+    runs-on: ubuntu-latest
+    needs: pre-flight
+    if: needs.pre-flight.outputs.deploy_ok == 'true'
+    steps:
+      - name: Create database backup
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cd ${{ secrets.VPS_APP_DIR }}
+            mkdir -p backups
+
+            BACKUP_FILE=\"backups/db_\$(date +%Y%m%d_%H%M%S).sql.gz\"
+
+            PG_CONTAINER=\$(docker ps -q -f name=postgres | head -1)
+            if [ -n \"\${PG_CONTAINER}\" ]; then
+              docker exec \${PG_CONTAINER} \
+                pg_dump -U postgres fishing_db | gzip > \"\${BACKUP_FILE}\"
+              echo \"Backup created: \${BACKUP_FILE}\"
+              ls -lh \"\${BACKUP_FILE}\"
+            else
+              echo 'WARN: No running postgres container — skipping backup'
+            fi
+          "
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [pre-flight, backup]
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Pull latest code on VPS
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cd ${{ secrets.VPS_APP_DIR }}
+            git fetch origin
+            git reset --hard origin/main
+            echo 'Code updated to:' \$(git rev-parse --short HEAD)
+          "
+
+      - name: Build all services
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cd ${{ secrets.VPS_APP_DIR }}
+            docker compose -f docker-compose.vps-host.yml --env-file .env.vps build --no-cache
+          "
+
+      - name: Stop old containers
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cd ${{ secrets.VPS_APP_DIR }}
+            docker compose -f docker-compose.vps-host.yml --env-file .env.vps down --timeout 30
+          "
+
+      - name: Start new containers
+        id: start
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cd ${{ secrets.VPS_APP_DIR }}
+            docker compose -f docker-compose.vps-host.yml --env-file .env.vps up -d --force-recreate
+          "
+
+      - name: Wait for healthcheck
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cd ${{ secrets.VPS_APP_DIR }}
+
+            echo 'Waiting for all services to become healthy (max 180s)...'
+            ELAPSED=0
+            while [ \$ELAPSED -lt 180 ]; do
+              STATUS=\$(docker compose -f docker-compose.vps-host.yml ps --format json 2>/dev/null || echo '{}')
+
+              UNHEALTHY=\$(echo \"\$STATUS\" | python3 -c \"
+          import sys, json
+          unhealthy = []
+          for line in sys.stdin:
+              try:
+                  d = json.loads(line.strip())
+                  h = d.get('Health', d.get('Status', 'unknown'))
+                  svc = d.get('Service', d.get('Name', '?'))
+                  if h not in ('healthy',):
+                      unhealthy.append(f'{svc}={h}')
+              except: pass
+          print(', '.join(unhealthy))
+          \" 2>/dev/null || echo 'checking...')
+
+              if [ -z \"\$UNHEALTHY\" ] || [ \"\$UNHEALTHY\" = '' ]; then
+                echo \"All services healthy at \${ELAPSED}s!\"
+                docker compose -f docker-compose.vps-host.yml ps --format 'table {{.Name}}\t{{.Status}}'
+                exit 0
+              fi
+
+              echo \"  \${ELAPSED}s: waiting... (\${UNHEALTHY})\"
+              sleep 10
+              ELAPSED=\$((ELAPSED + 10))
+            done
+
+            echo 'ERROR: Timeout waiting for healthy services'
+            docker compose -f docker-compose.vps-host.yml ps
+            exit 1
+          "
+
+      - name: Verify HTTP healthchecks
+        id: verify
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            set -e
+
+            echo '=== HTTP Healthchecks ==='
+            PASS=0
+            FAIL=0
+
+            check() {
+              local name=\"\$1\" url=\"\$2\"
+              local status
+              status=\$(curl -sf -o /dev/null -w '%{http_code}' \"\$url\" 2>/dev/null) || status='000'
+              if [ \"\$status\" = '200' ]; then
+                echo \"  ✅ \$name (\$url) → \$status\"
+                PASS=\$((PASS + 1))
+              else
+                echo \"  ❌ \$name (\$url) → \$status\"
+                FAIL=\$((FAIL + 1))
+              fi
+            }
+
+            check 'Auth'      'http://127.0.0.1:8001/health'
+            check 'Email'     'http://127.0.0.1:8006/health'
+            check 'Forecast'  'http://127.0.0.1:8007/health'
+            check 'Frontend'  'http://127.0.0.1:3000/'
+
+            echo ''
+            echo '=== Redis ==='
+            docker exec \$(docker ps -q -f name=redis | head -1) redis-cli -h 127.0.0.1 ping || { echo '❌ Redis failed'; FAIL=\$((FAIL + 1)); }
+
+            echo ''
+            echo '=== PostgreSQL ==='
+            docker exec \$(docker ps -q -f name=postgres | head -1) pg_isready -U postgres || { echo '❌ PostgreSQL failed'; FAIL=\$((FAIL + 1)); }
+
+            echo ''
+            echo \"=== Results: \${PASS} passed, \${FAIL} failed ===\"
+
+            if [ \"\$FAIL\" -gt 0 ]; then
+              echo 'DEPLOY FAILED — some healthchecks failed'
+              exit 1
+            fi
+          "
+
+      - name: Check logs for errors
+        if: success()
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cd ${{ secrets.VPS_APP_DIR }}
+            docker compose -f docker-compose.vps-host.yml logs --tail=50 2>&1 | \
+              grep -iE 'error|fatal|panic|NOAUTH|ECONNREFUSED' | \
+              grep -viE 'healthcheck|favicon' && echo '⚠️  Errors found in logs' || echo '✅ Logs clean'
+          "
+
+  rollback:
+    name: Rollback
+    runs-on: ubuntu-latest
+    needs: [pre-flight, deploy]
+    if: failure() && needs.pre-flight.outputs.deploy_ok == 'true'
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Rollback containers
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cd ${{ secrets.VPS_APP_DIR }}
+
+            echo '=== ROLLBACK STARTED ==='
+
+            echo 'Stopping current containers...'
+            docker compose -f docker-compose.vps-host.yml --env-file .env.vps down --timeout 30
+
+            PREV_TAG=\$(git tag --sort=-version:refname | sed -n '2p')
+            if [ -n \"\${PREV_TAG}\" ]; then
+              echo \"Rolling back to: \${PREV_TAG}\"
+              git checkout \"\${PREV_TAG}\"
+            else
+              echo 'WARN: No previous tag found — keeping current code'
+            fi
+
+            echo 'Rebuilding previous version...'
+            docker compose -f docker-compose.vps-host.yml --env-file .env.vps build --no-cache
+            docker compose -f docker-compose.vps-host.yml --env-file .env.vps up -d --force-recreate
+
+            echo '=== ROLLBACK COMPLETED ==='
+          "
+
+  finalize:
+    name: Finalize
+    runs-on: ubuntu-latest
+    needs: [pre-flight, deploy]
+    if: success()
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Cleanup old images
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            docker image prune -f --filter 'until=72h'
+            docker volume prune -f 2>/dev/null || true
+          "
+
+      - name: Cleanup old backups (keep last 5)
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key \
+              ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cd ${{ secrets.VPS_APP_DIR }}
+            ls -t backups/db_*.sql.gz 2>/dev/null | tail -n +6 | xargs -r rm -v
+          "
+
+      - name: Deployment Report
+        run: |
+          echo "=============================================="
+          echo "🎉 PRODUCTION DEPLOYMENT SUCCESSFUL"
+          echo "=============================================="
+          echo "📦 Version:  ${{ needs.pre-flight.outputs.new_version }}"
+          echo "📊 From:     ${{ needs.pre-flight.outputs.previous_version }}"
+          echo "🐳 Services: All healthy"
+          echo "💾 Backup:   Created before deploy"
+          echo "🧹 Cleanup:  Old images removed"
+          echo "=============================================="

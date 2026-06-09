@@ -42,9 +42,8 @@
 | T-EXEC-001 | Запустить автотесты pytest / Jest | Результаты тестов |
 | T-EXEC-002 | Проверить API (curl / httpie) | API test results |
 | T-EXEC-003 | Проверить UI / UX | UI test results |
-| T-EXEC-004 | Проверить безопасность (валидация, авторизация) | Security checklist |
-| T-EXEC-005 | Запустить E2E-тесты Playwright (Правило 8) | E2E test results |
-| T-EXEC-006 | Проверить structlog-логирование на каждом endpoint (Правило 9) | Logging audit |
+| T-EXEC-004 | Запустить E2E-тесты Playwright (Правило 8) | E2E test results |
+| T-EXEC-005 | Проверить structlog-логирование на каждом endpoint (Правило 9) | Logging audit |
 
 ### Шаг 3.5: ГЛУБОКАЯ ПРОВЕРКА КОДА (обязательный этап)
 
@@ -141,8 +140,30 @@
 
 ### Найденные дефекты:
 - BUG-003 (Major): Нет лимита на page_size → потенциальная DoS
-- BUG-004 (Minor): Нет обработки duplicate key error → 500 вместо 409
-```
+ - BUG-004 (Minor): Нет обработки duplicate key error → 500 вместо 409
+ ```
+
+### Шаг 3.6: Security-проверка (для задач, затрагивающих auth/input/API)
+
+Тестировщик дополняет проверку security-чеклистом из `SKILL_SECURITY.md`.
+Выполняется ВСЕГДА для задач, затрагивающих:
+- Аутентификацию / авторизацию
+- Обработку пользовательского ввода
+- API endpoints
+- Доступ к БД
+- Файловые загрузки
+
+| Задача | Описание | Выходной артефакт |
+|--------|----------|-------------------|
+| T-SEC-001 | Проверить JWT-авторизацию на защищённых роутах | Auth checklist |
+| T-SEC-002 | Проверить валидацию входных данных (Pydantic-схемы) | Validation checklist |
+| T-SEC-003 | Проверить SQL-инъекции (параметризованные запросы) | SQL injection test |
+| T-SEC-004 | Проверить Rate limiting на публичных endpoints | Rate limit test |
+| T-SEC-005 | Проверить CORS-конфигурацию | CORS checklist |
+| T-SEC-006 | Проверить что секреты не в коде | Secrets scan |
+| T-SEC-007 | Проверить обработку файлов (path traversal, size limits) | File upload test |
+
+Найденные уязвимости оформляются как баг-репорты с префиксом `SEC-XXX`.
 
 ### Шаг 4: Отчётность и баг-репорты
 
