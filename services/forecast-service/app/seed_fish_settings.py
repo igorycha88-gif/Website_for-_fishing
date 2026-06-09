@@ -1,3 +1,4 @@
+import asyncio
 from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
@@ -764,7 +765,278 @@ FISH_BITE_SETTINGS_DATA = [
         "uv_sensitivity": Decimal("0.4"),
         "water_level_sensitivity": Decimal("0.4"),
     },
+    {
+        "fish_name": "Линь",
+        "optimal_temp_min": Decimal("16"),
+        "optimal_temp_max": Decimal("28"),
+        "optimal_pressure_min": 755,
+        "optimal_pressure_max": 768,
+        "max_wind_speed": Decimal("5"),
+        "precipitation_tolerance": 2,
+        "prefer_morning": True,
+        "prefer_evening": True,
+        "prefer_overcast": True,
+        "active_in_winter": False,
+        "moon_sensitivity": Decimal("0.4"),
+        "season_start_month": 5,
+        "season_end_month": 10,
+        "spawn_start_month": 5,
+        "spawn_end_month": 7,
+        "spawn_start_day": 15,
+        "spawn_end_day": 15,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 1, "spawn_end_day": 20},
+            "central": {"spawn_start_month": 6, "spawn_end_month": 7, "spawn_start_day": 1, "spawn_end_day": 15},
+            "north": {"spawn_start_month": 7, "spawn_end_month": 7, "spawn_start_day": 1, "spawn_end_day": 31},
+        },
+        "region_codes": [],
+        "bait_recommendations": {
+            "winter": [],
+            "spring": ["червь", "опарыш", "мотыль"],
+            "summer": ["червь", "кукуруза", "хлеб", "тесто"],
+            "autumn": ["червь", "опарыш", "мотыль"],
+        },
+        "lure_recommendations": {},
+        "pre_spawn_days": 12,
+        "post_spawn_days": 7,
+        "moon_phase_preference": "neutral",
+        "turbidity_sensitive": True,
+        "uv_sensitivity": Decimal("0.3"),
+        "water_level_sensitivity": Decimal("0.3"),
+    },
+    {
+        "fish_name": "Густера",
+        "optimal_temp_min": Decimal("8"),
+        "optimal_temp_max": Decimal("22"),
+        "optimal_pressure_min": 755,
+        "optimal_pressure_max": 768,
+        "max_wind_speed": Decimal("7"),
+        "precipitation_tolerance": 3,
+        "prefer_morning": True,
+        "prefer_evening": True,
+        "prefer_overcast": True,
+        "active_in_winter": False,
+        "moon_sensitivity": Decimal("0.3"),
+        "season_start_month": 4,
+        "season_end_month": 10,
+        "spawn_start_month": 5,
+        "spawn_end_month": 6,
+        "spawn_start_day": 1,
+        "spawn_end_day": 20,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 15, "spawn_end_day": 15},
+            "central": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 1, "spawn_end_day": 15},
+            "north": {"spawn_start_month": 6, "spawn_end_month": 6, "spawn_start_day": 10, "spawn_end_day": 30},
+        },
+        "region_codes": [],
+        "bait_recommendations": {
+            "winter": ["мотыль", "опарыш"],
+            "spring": ["мотыль", "опарыш", "червь", "перловка"],
+            "summer": ["перловка", "кукуруза", "опарыш", "горох"],
+            "autumn": ["мотыль", "опарыш", "червь"],
+        },
+        "lure_recommendations": {},
+        "pre_spawn_days": 10,
+        "post_spawn_days": 5,
+        "moon_phase_preference": "new_moon",
+        "turbidity_sensitive": False,
+        "uv_sensitivity": Decimal("0.2"),
+        "water_level_sensitivity": Decimal("0.3"),
+    },
+    {
+        "fish_name": "Красноперка",
+        "optimal_temp_min": Decimal("12"),
+        "optimal_temp_max": Decimal("26"),
+        "optimal_pressure_min": 755,
+        "optimal_pressure_max": 768,
+        "max_wind_speed": Decimal("7"),
+        "precipitation_tolerance": 3,
+        "prefer_morning": True,
+        "prefer_evening": True,
+        "prefer_overcast": True,
+        "active_in_winter": False,
+        "moon_sensitivity": Decimal("0.3"),
+        "season_start_month": 4,
+        "season_end_month": 10,
+        "spawn_start_month": 4,
+        "spawn_end_month": 5,
+        "spawn_start_day": 15,
+        "spawn_end_day": 31,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 4, "spawn_end_month": 4, "spawn_start_day": 1, "spawn_end_day": 25},
+            "central": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 15, "spawn_end_day": 20},
+            "north": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 1, "spawn_end_day": 15},
+        },
+        "region_codes": [],
+        "bait_recommendations": {
+            "winter": [],
+            "spring": ["мотыль", "опарыш", "червь"],
+            "summer": ["перловка", "кукуруза", "хлеб", "опарыш"],
+            "autumn": ["мотыль", "опарыш", "червь"],
+        },
+        "lure_recommendations": {},
+        "pre_spawn_days": 10,
+        "post_spawn_days": 5,
+        "moon_phase_preference": "neutral",
+        "turbidity_sensitive": False,
+        "uv_sensitivity": Decimal("0.2"),
+        "water_level_sensitivity": Decimal("0.2"),
+    },
+    {
+        "fish_name": "Угорь",
+        "optimal_temp_min": Decimal("14"),
+        "optimal_temp_max": Decimal("26"),
+        "optimal_pressure_min": 755,
+        "optimal_pressure_max": 768,
+        "max_wind_speed": Decimal("5"),
+        "precipitation_tolerance": 2,
+        "prefer_morning": False,
+        "prefer_evening": True,
+        "prefer_overcast": True,
+        "active_in_winter": False,
+        "moon_sensitivity": Decimal("0.6"),
+        "season_start_month": 5,
+        "season_end_month": 10,
+        "spawn_start_month": None,
+        "spawn_end_month": None,
+        "spawn_start_day": 1,
+        "spawn_end_day": 31,
+        "spawn_periods_by_zone": {},
+        "region_codes": ["LEN", "PSK", "NGR", "TVE", "YAR", "VLA", "KRS", "KOS", "BRY", "SMO", "IVA"],
+        "bait_recommendations": {
+            "winter": [],
+            "spring": ["червь", "кусок рыбы", "личинка"],
+            "summer": ["червь", "кусок рыбы", "моллюск"],
+            "autumn": ["червь", "кусок рыбы"],
+        },
+        "lure_recommendations": {},
+        "pre_spawn_days": 0,
+        "post_spawn_days": 0,
+        "moon_phase_preference": "new_moon",
+        "turbidity_sensitive": True,
+        "uv_sensitivity": Decimal("0.5"),
+        "water_level_sensitivity": Decimal("0.4"),
+    },
+    {
+        "fish_name": "Стерлядь",
+        "optimal_temp_min": Decimal("8"),
+        "optimal_temp_max": Decimal("20"),
+        "optimal_pressure_min": 758,
+        "optimal_pressure_max": 770,
+        "max_wind_speed": Decimal("5"),
+        "precipitation_tolerance": 2,
+        "prefer_morning": True,
+        "prefer_evening": True,
+        "prefer_overcast": True,
+        "active_in_winter": False,
+        "moon_sensitivity": Decimal("0.5"),
+        "season_start_month": 5,
+        "season_end_month": 10,
+        "spawn_start_month": 4,
+        "spawn_end_month": 6,
+        "spawn_start_day": 15,
+        "spawn_end_day": 15,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 10, "spawn_end_day": 20},
+            "central": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 1, "spawn_end_day": 15},
+            "north": {"spawn_start_month": 6, "spawn_end_month": 7, "spawn_start_day": 1, "spawn_end_day": 15},
+        },
+        "region_codes": ["VGG", "AST", "SAR", "SAM", "PER", "TOM", "NVS", "KEM", "ROS"],
+        "bait_recommendations": {
+            "winter": [],
+            "spring": ["червь", "личинка", "моллюск"],
+            "summer": ["червь", "моллюск", "опарыш"],
+            "autumn": ["червь", "моллюск"],
+        },
+        "lure_recommendations": {},
+        "pre_spawn_days": 14,
+        "post_spawn_days": 10,
+        "moon_phase_preference": "neutral",
+        "turbidity_sensitive": True,
+        "uv_sensitivity": Decimal("0.4"),
+        "water_level_sensitivity": Decimal("0.4"),
+    },
+    {
+        "fish_name": "Белуга",
+        "optimal_temp_min": Decimal("8"),
+        "optimal_temp_max": Decimal("20"),
+        "optimal_pressure_min": 758,
+        "optimal_pressure_max": 770,
+        "max_wind_speed": Decimal("5"),
+        "precipitation_tolerance": 2,
+        "prefer_morning": True,
+        "prefer_evening": True,
+        "prefer_overcast": True,
+        "active_in_winter": False,
+        "moon_sensitivity": Decimal("0.5"),
+        "season_start_month": 4,
+        "season_end_month": 10,
+        "spawn_start_month": 3,
+        "spawn_end_month": 5,
+        "spawn_start_day": 15,
+        "spawn_end_day": 31,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 3, "spawn_end_month": 4, "spawn_start_day": 15, "spawn_end_day": 20},
+            "central": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 1, "spawn_end_day": 20},
+        },
+        "region_codes": ["AST", "VGG", "ROS", "KDA"],
+        "bait_recommendations": {
+            "winter": [],
+            "spring": ["рыбка", "моллюск", "кусок рыбы"],
+            "summer": ["рыбка", "моллюск", "кусок рыбы"],
+            "autumn": ["рыбка", "кусок рыбы"],
+        },
+        "lure_recommendations": {},
+        "pre_spawn_days": 14,
+        "post_spawn_days": 10,
+        "moon_phase_preference": "neutral",
+        "turbidity_sensitive": True,
+        "uv_sensitivity": Decimal("0.4"),
+        "water_level_sensitivity": Decimal("0.4"),
+    },
+    {
+        "fish_name": "Осетр",
+        "optimal_temp_min": Decimal("8"),
+        "optimal_temp_max": Decimal("20"),
+        "optimal_pressure_min": 758,
+        "optimal_pressure_max": 770,
+        "max_wind_speed": Decimal("5"),
+        "precipitation_tolerance": 2,
+        "prefer_morning": True,
+        "prefer_evening": True,
+        "prefer_overcast": True,
+        "active_in_winter": False,
+        "moon_sensitivity": Decimal("0.5"),
+        "season_start_month": 5,
+        "season_end_month": 10,
+        "spawn_start_month": 4,
+        "spawn_end_month": 6,
+        "spawn_start_day": 10,
+        "spawn_end_day": 20,
+        "spawn_periods_by_zone": {
+            "south": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 5, "spawn_end_day": 15},
+            "central": {"spawn_start_month": 5, "spawn_end_month": 6, "spawn_start_day": 1, "spawn_end_day": 10},
+        },
+        "region_codes": ["AST", "VGG", "ROS", "KDA", "SAR"],
+        "bait_recommendations": {
+            "winter": [],
+            "spring": ["червь", "моллюск", "личинка"],
+            "summer": ["червь", "моллюск", "кусок рыбы"],
+            "autumn": ["червь", "моллюск"],
+        },
+        "lure_recommendations": {},
+        "pre_spawn_days": 14,
+        "post_spawn_days": 10,
+        "moon_phase_preference": "neutral",
+        "turbidity_sensitive": True,
+        "uv_sensitivity": Decimal("0.4"),
+        "water_level_sensitivity": Decimal("0.4"),
+    },
 ]
+
+
+SEED_RETRY_ATTEMPTS = 5
+SEED_RETRY_DELAY_SECONDS = 3
 
 
 async def get_region_ids_by_codes(db: AsyncSession, codes: List[str]) -> List[UUID]:
@@ -783,66 +1055,107 @@ async def get_fish_type_id_by_name(db: AsyncSession, fish_name: str) -> Optional
     return row[0] if row else None
 
 
-async def seed_fish_bite_settings(db: AsyncSession) -> int:
-    result = await db.execute(select(FishBiteSettings).limit(1))
-    if result.scalar_one_or_none():
-        logger.info("Fish bite settings already seeded", service="forecast-service")
-        return 0
+async def _seed_single_fish(db: AsyncSession, fish_data: dict) -> bool:
+    fish_type_id = await get_fish_type_id_by_name(db, fish_data["fish_name"])
 
-    count = 0
-    for fish_data in FISH_BITE_SETTINGS_DATA:
-        fish_type_id = await get_fish_type_id_by_name(db, fish_data["fish_name"])
+    if not fish_type_id:
+        return False
 
-        if not fish_type_id:
-            logger.warning(
-                f"Fish type not found: {fish_data['fish_name']}, skipping",
-                service="forecast-service",
-                fish_name=fish_data["fish_name"],
-            )
-            continue
-
-        region_ids = await get_region_ids_by_codes(db, fish_data["region_codes"])
-
-        settings = FishBiteSettings(
-            fish_type_id=fish_type_id,
-            optimal_temp_min=fish_data["optimal_temp_min"],
-            optimal_temp_max=fish_data["optimal_temp_max"],
-            optimal_pressure_min=fish_data["optimal_pressure_min"],
-            optimal_pressure_max=fish_data["optimal_pressure_max"],
-            max_wind_speed=fish_data["max_wind_speed"],
-            precipitation_tolerance=fish_data["precipitation_tolerance"],
-            prefer_morning=fish_data["prefer_morning"],
-            prefer_evening=fish_data["prefer_evening"],
-            prefer_overcast=fish_data["prefer_overcast"],
-            active_in_winter=fish_data["active_in_winter"],
-            moon_sensitivity=fish_data["moon_sensitivity"],
-            season_start_month=fish_data["season_start_month"],
-            season_end_month=fish_data["season_end_month"],
-            spawn_start_month=fish_data.get("spawn_start_month"),
-            spawn_end_month=fish_data.get("spawn_end_month"),
-            spawn_start_day=fish_data.get("spawn_start_day", 1),
-            spawn_end_day=fish_data.get("spawn_end_day", 31),
-            spawn_periods_by_zone=fish_data.get("spawn_periods_by_zone", {}),
-            region_ids=region_ids,
-            bait_recommendations=fish_data.get("bait_recommendations", {}),
-            lure_recommendations=fish_data.get("lure_recommendations", {}),
-            pre_spawn_days=fish_data.get("pre_spawn_days", 14),
-            post_spawn_days=fish_data.get("post_spawn_days", 5),
-            moon_phase_preference=fish_data.get("moon_phase_preference", "neutral"),
-            turbidity_sensitive=fish_data.get("turbidity_sensitive", False),
-            uv_sensitivity=fish_data.get("uv_sensitivity", Decimal("0.3")),
-            water_level_sensitivity=fish_data.get("water_level_sensitivity", Decimal("0.3")),
+    existing = await db.execute(
+        select(FishBiteSettings).where(
+            FishBiteSettings.fish_type_id == fish_type_id
         )
-
-        db.add(settings)
-        count += 1
+    )
+    if existing.scalar_one_or_none():
         logger.info(
-            f"Added fish bite settings for {fish_data['fish_name']}",
+            f"Fish bite settings already exist for {fish_data['fish_name']}, skipping",
             service="forecast-service",
             fish_name=fish_data["fish_name"],
-            region_count=len(region_ids),
         )
+        return True
 
-    await db.commit()
-    logger.info(f"Seeded {count} fish bite settings", service="forecast-service")
-    return count
+    region_ids = await get_region_ids_by_codes(db, fish_data["region_codes"])
+
+    settings = FishBiteSettings(
+        fish_type_id=fish_type_id,
+        optimal_temp_min=fish_data["optimal_temp_min"],
+        optimal_temp_max=fish_data["optimal_temp_max"],
+        optimal_pressure_min=fish_data["optimal_pressure_min"],
+        optimal_pressure_max=fish_data["optimal_pressure_max"],
+        max_wind_speed=fish_data["max_wind_speed"],
+        precipitation_tolerance=fish_data["precipitation_tolerance"],
+        prefer_morning=fish_data["prefer_morning"],
+        prefer_evening=fish_data["prefer_evening"],
+        prefer_overcast=fish_data["prefer_overcast"],
+        active_in_winter=fish_data["active_in_winter"],
+        moon_sensitivity=fish_data["moon_sensitivity"],
+        season_start_month=fish_data["season_start_month"],
+        season_end_month=fish_data["season_end_month"],
+        spawn_start_month=fish_data.get("spawn_start_month"),
+        spawn_end_month=fish_data.get("spawn_end_month"),
+        spawn_start_day=fish_data.get("spawn_start_day", 1),
+        spawn_end_day=fish_data.get("spawn_end_day", 31),
+        spawn_periods_by_zone=fish_data.get("spawn_periods_by_zone", {}),
+        region_ids=region_ids,
+        bait_recommendations=fish_data.get("bait_recommendations", {}),
+        lure_recommendations=fish_data.get("lure_recommendations", {}),
+        pre_spawn_days=fish_data.get("pre_spawn_days", 14),
+        post_spawn_days=fish_data.get("post_spawn_days", 5),
+        moon_phase_preference=fish_data.get("moon_phase_preference", "neutral"),
+        turbidity_sensitive=fish_data.get("turbidity_sensitive", False),
+        uv_sensitivity=fish_data.get("uv_sensitivity", Decimal("0.3")),
+        water_level_sensitivity=fish_data.get("water_level_sensitivity", Decimal("0.3")),
+    )
+
+    db.add(settings)
+    logger.info(
+        f"Added fish bite settings for {fish_data['fish_name']}",
+        service="forecast-service",
+        fish_name=fish_data["fish_name"],
+        region_count=len(region_ids),
+    )
+    return True
+
+
+async def seed_fish_bite_settings(db: AsyncSession) -> int:
+    for attempt in range(SEED_RETRY_ATTEMPTS):
+        count = 0
+        skipped = 0
+
+        for fish_data in FISH_BITE_SETTINGS_DATA:
+            try:
+                seeded = await _seed_single_fish(db, fish_data)
+                if seeded:
+                    count += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                logger.error(
+                    f"Error seeding fish bite settings for {fish_data['fish_name']}",
+                    service="forecast-service",
+                    fish_name=fish_data["fish_name"],
+                    error=str(e),
+                    exc_info=True,
+                )
+                skipped += 1
+
+        if count > 0 or skipped == 0:
+            await db.commit()
+            logger.info(
+                f"Seeded {count} fish bite settings (skipped {skipped})",
+                service="forecast-service",
+                attempt=attempt + 1,
+            )
+            return count
+
+        logger.warning(
+            f"No fish types found in database, retrying in {SEED_RETRY_DELAY_SECONDS}s (attempt {attempt + 1}/{SEED_RETRY_ATTEMPTS})",
+            service="forecast-service",
+        )
+        await asyncio.sleep(SEED_RETRY_DELAY_SECONDS)
+
+    logger.error(
+        "Failed to seed fish bite settings after all retries",
+        service="forecast-service",
+    )
+    return 0

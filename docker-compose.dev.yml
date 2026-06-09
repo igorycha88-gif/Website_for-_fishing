@@ -279,6 +279,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      places-service:
+        condition: service_started
     deploy:
       resources: *backend-resources
 
