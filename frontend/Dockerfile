@@ -4,7 +4,7 @@ RUN apk add --no-cache libc6-compat || true
 FROM base AS deps
 WORKDIR /app
 COPY package.json ./
-RUN npm install --platform=linux --arch=arm64 --prefer-offline --no-audit --no-fund --legacy-peer-deps
+RUN npm install --prefer-offline --no-audit --no-fund --legacy-peer-deps
 
 FROM base AS builder
 WORKDIR /app

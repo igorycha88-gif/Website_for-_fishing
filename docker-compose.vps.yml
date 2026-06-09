@@ -1,0 +1,183 @@
+version: '3.8'
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-healthcheck: &healthcheck
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 15s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    mem_limit: 256m
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fishing_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.vps}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/migrations/001_add_water_type_to_places.sql:/docker-entrypoint-initdb.d/02-migration-001.sql
+      - ./database/migrations/002_add_spawn_fields.sql:/docker-entrypoint-initdb.d/03-migration-002.sql
+      - ./database/migrations/002b_update_spawn_periods.sql:/docker-entrypoint-initdb.d/04-migration-002b.sql
+      - ./database/migrations/003_add_bait_lure_columns.sql:/docker-entrypoint-initdb.d/05-migration-003.sql
+      - ./database/migrations/003_add_user_added_fish.sql:/docker-entrypoint-initdb.d/06-migration-003b.sql
+      - ./database/migrations/004_add_jwt_blacklist_fields.sql:/docker-entrypoint-initdb.d/07-migration-004.sql
+      - ./database/migrations/005_create_password_reset_tokens.sql:/docker-entrypoint-initdb.d/08-migration-005.sql
+      - ./database/migrations/006_add_user_profile_fields.sql:/docker-entrypoint-initdb.d/09-migration-006.sql
+      - ./database/migrations/007_add_climate_zones.sql:/docker-entrypoint-initdb.d/10-migration-007.sql
+    networks:
+      - fishing-network
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-fishing_db}"]
+      <<: *healthcheck
+
+  redis:
+    image: redis:7-alpine
+    mem_limit: 80m
+    command: redis-server --appendonly yes --maxmemory 48mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - fishing-network
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      <<: *healthcheck
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    mem_limit: 200m
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fishing_db}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env.vps}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-7}
+      EMAIL_SERVICE_URL: http://email-service:8005
+      EMAIL_SERVICE_API_KEY: ${EMAIL_SERVICE_API_KEY}
+      ENABLE_EMAIL_SENDING: ${ENABLE_EMAIL_SENDING:-true}
+      EMAIL_CODE_EXPIRE_MINUTES: ${EMAIL_CODE_EXPIRE_MINUTES:-15}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SERVICE_NAME: auth-service
+      ENVIRONMENT: production
+    networks:
+      - fishing-network
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      email-service:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      <<: *healthcheck
+
+  email-service:
+    build:
+      context: ./services/email-service
+      dockerfile: Dockerfile
+    mem_limit: 150m
+    environment:
+      SMTP_HOST: ${SMTP_HOST:-smtp.yandex.ru}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER:?Set SMTP_USER in .env.vps}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:?Set SMTP_PASSWORD in .env.vps}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:?Set SMTP_FROM_EMAIL in .env.vps}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-FishMap}
+      EMAIL_SERVICE_API_KEY: ${EMAIL_SERVICE_API_KEY}
+      ENABLE_EMAIL_SENDING: ${ENABLE_EMAIL_SENDING:-true}
+      EMAIL_CODE_EXPIRE_MINUTES: ${EMAIL_CODE_EXPIRE_MINUTES:-15}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SERVICE_NAME: email-service
+    networks:
+      - fishing-network
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health')"]
+      <<: *healthcheck
+
+  forecast-service:
+    build:
+      context: ./services/forecast-service
+      dockerfile: Dockerfile
+    mem_limit: 200m
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fishing_db}
+      REDIS_URL: redis://redis:6379/0
+      OPENWEATHERMAP_API_KEY: ${OPENWEATHERMAP_API_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SERVICE_NAME: forecast-service
+    networks:
+      - fishing-network
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      <<: *healthcheck
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY:-}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3080}
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+    ports:
+      - "127.0.0.1:3080:3000"
+    mem_limit: 256m
+    environment:
+      DOCKER_ENV: "true"
+      AUTH_SERVICE_URL: http://auth-service:8000
+      PLACES_SERVICE_URL: http://auth-service:8000
+      REPORTS_SERVICE_URL: http://auth-service:8000
+      BOOKING_SERVICE_URL: http://auth-service:8000
+      SHOP_SERVICE_URL: http://auth-service:8000
+      EMAIL_SERVICE_URL: http://email-service:8005
+      FORECAST_SERVICE_URL: http://forecast-service:8000
+    networks:
+      - fishing-network
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      - auth-service
+      - email-service
+      - forecast-service
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
+      <<: *healthcheck
+
+networks:
+  fishing-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
