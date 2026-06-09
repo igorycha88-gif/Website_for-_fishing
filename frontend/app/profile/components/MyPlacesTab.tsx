@@ -2,12 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { MapPin, Plus, Filter, Search, Loader2, LogIn, Pencil, Trash2, X, Calendar, Eye, EyeOff, ChevronDown, ChevronUp, Fish } from "lucide-react";
+import { MapPin, Plus, Filter, Search, Loader2, LogIn, Pencil, Trash2, X, Calendar, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react";
 import YandexMap from "@/components/YandexMap";
 import AddPlaceForm from "@/components/AddPlaceForm";
 import EditPlaceForm from "@/components/EditPlaceForm";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import FishingForecast from "@/components/FishingForecast";
 import { usePlaces } from "@/hooks/usePlaces";
 import { useToast } from "@/stores/useToastStore";
 import { Place, PlaceFilters, PlaceUpdate } from "@/types/place";
@@ -32,10 +31,8 @@ export default function MyPlacesTab() {
   const [loadingPlaces, setLoadingPlaces] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [showForecast, setShowForecast] = useState(true);
   const [expandedPlaceId, setExpandedPlaceId] = useState<string | null>(null);
   const [showPlacesList, setShowPlacesList] = useState(true);
-  const [selectedPlaceForForecast, setSelectedPlaceForForecast] = useState<Place | null>(null);
 
   const loadPlaces = useCallback(async () => {
     if (!isAuthenticated || !token) {
@@ -504,17 +501,6 @@ export default function MyPlacesTab() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedPlaceForForecast(place);
-                                setShowForecast(true);
-                              }}
-                              className="flex items-center justify-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition"
-                              title="Показать прогноз клева"
-                            >
-                              <Fish className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
                                 setSelectedPlace(place);
                                 setShowEditForm(true);
                               }}
@@ -543,54 +529,6 @@ export default function MyPlacesTab() {
           </div>
         )}
       </div>
-
-      {showForecast && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-6"
-        >
-          {selectedPlaceForForecast && (
-            <div className="mb-4 flex items-center justify-between bg-blue-50 px-4 py-3 rounded-xl">
-              <div className="flex items-center gap-2">
-                <Fish className="w-5 h-5 text-blue-600" />
-                <span className="font-medium text-blue-900">
-                  Прогноз для места: <strong>{selectedPlaceForForecast.name}</strong>
-                </span>
-              </div>
-              <button
-                onClick={() => setSelectedPlaceForForecast(null)}
-                className="text-blue-600 hover:text-blue-800 transition"
-                title="Сбросить и показать выбор региона"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          )}
-          <FishingForecast 
-            showRegionSelector={true}
-            latitude={selectedPlaceForForecast ? Number(selectedPlaceForForecast.latitude) : undefined}
-            longitude={selectedPlaceForForecast ? Number(selectedPlaceForForecast.longitude) : undefined}
-          />
-        </motion.div>
-      )}
-
-      <button
-        onClick={() => setShowForecast(!showForecast)}
-        className="mt-4 w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-blue-600 to-cyan-500 text-white rounded-xl hover:from-blue-700 hover:to-cyan-600 transition font-medium"
-      >
-        {showForecast ? (
-          <>
-            <ChevronUp className="w-5 h-5" />
-            Скрыть прогноз клева
-          </>
-        ) : (
-          <>
-            <ChevronDown className="w-5 h-5" />
-            Показать прогноз клева
-          </>
-        )}
-      </button>
 
       {showAddForm && (
         <AddPlaceForm
@@ -774,17 +712,6 @@ export default function MyPlacesTab() {
               </div>
 
               <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
-                <button
-                  onClick={() => {
-                    setSelectedPlaceForForecast(selectedPlace);
-                    setSelectedPlace(null);
-                    setShowForecast(true);
-                  }}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-100 text-green-700 rounded-lg font-medium hover:bg-green-200 transition"
-                >
-                  <Fish className="w-4 h-4" />
-                  Прогноз клева
-                </button>
                 <button
                   onClick={() => {
                     console.log("[MyPlacesTab] Bottom Edit button clicked");

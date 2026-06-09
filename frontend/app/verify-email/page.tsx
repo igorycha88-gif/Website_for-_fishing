@@ -19,7 +19,9 @@ function VerifyEmailContent() {
   const email = searchParams.get("email") || "";
   const [formData, setFormData] = useState({ code: "" });
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [error, setError] = useState("");
+  const [resendSuccess, setResendSuccess] = useState("");
   
   const { isLimited, remainingSeconds, startLimit } = useRateLimit();
 
@@ -28,6 +30,32 @@ function VerifyEmailContent() {
       router.push("/register");
     }
   }, [email, router]);
+
+  const handleResendCode = async () => {
+    if (resendLoading) return;
+    setResendLoading(true);
+    setError("");
+    setResendSuccess("");
+
+    try {
+      const response = await fetch("/api/v1/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+      if (response.ok) {
+        setResendSuccess("Код отправлен повторно");
+        setTimeout(() => setResendSuccess(""), 5000);
+      } else {
+        setError("Не удалось отправить код. Попробуйте позже.");
+      }
+    } catch {
+      setError("Не удалось подключиться к серверу");
+    } finally {
+      setResendLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,15 +159,22 @@ function VerifyEmailContent() {
           </div>
         )}
 
+        {resendSuccess && (
+          <div className="bg-accent-green/10 text-accent-green px-4 py-3 rounded-xl text-sm mb-4">
+            {resendSuccess}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Код подтверждения</label>
             <div className="relative">
               <CheckCircle className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                required
-                maxLength={6}
+                <input
+                  type="text"
+                  required
+                  minLength={6}
+                  maxLength={6}
                 value={formData.code}
                 onChange={(e) => setFormData({ code: e.target.value })}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-sea focus:border-transparent outline-none transition-all text-center text-2xl tracking-widest uppercase"
@@ -161,12 +196,14 @@ function VerifyEmailContent() {
 
         <p className="text-center text-gray-600 mt-6">
           Не получили код?{" "}
-          <Link
-            href="/register"
-            className="text-primary-sea font-medium hover:underline"
+          <button
+            type="button"
+            onClick={handleResendCode}
+            disabled={resendLoading}
+            className="text-primary-sea font-medium hover:underline disabled:opacity-50"
           >
-            Зарегистрироваться заново
-          </Link>
+            {resendLoading ? "Отправка..." : "Отправить повторно"}
+          </button>
         </p>
       </motion.div>
     </div>

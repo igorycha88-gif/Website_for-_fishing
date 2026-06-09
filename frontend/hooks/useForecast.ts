@@ -6,6 +6,8 @@ import {
   FishTypeBrief,
   AvailableDatesResponse,
   DaySummaryResponse,
+  FeedbackRequest,
+  FeedbackResponse,
 } from "@/types/forecast";
 
 interface CustomFishResponse {
@@ -253,6 +255,31 @@ export function useForecast() {
     }
   }, []);
 
+  const submitFeedback = useCallback(async (data: FeedbackRequest): Promise<FeedbackResponse> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/v1/forecast/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: "Unknown error" }));
+        throw new Error(errorData.detail || "Failed to submit feedback");
+      }
+
+      return response.json();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit feedback");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   return {
     loading,
     error,
@@ -265,5 +292,6 @@ export function useForecast() {
     getAllFishTypes,
     getAvailableDates,
     getDaySummary,
+    submitFeedback,
   };
 }

@@ -161,6 +161,7 @@ CREATE TABLE regions (
     latitude NUMERIC(10, 8) NOT NULL,
     longitude NUMERIC(11, 8) NOT NULL,
     timezone VARCHAR(50) NOT NULL DEFAULT 'Europe/Moscow',
+    climate_zone VARCHAR(10) DEFAULT 'central',
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -188,6 +189,7 @@ CREATE TABLE weather_data (
     moon_phase NUMERIC(3, 2),
     sunrise TIME,
     sunset TIME,
+    water_temperature NUMERIC(5, 2),
     created_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(region_id, forecast_date, forecast_hour)
 );
@@ -213,9 +215,16 @@ CREATE TABLE fish_bite_settings (
     spawn_end_month INTEGER,
     spawn_start_day INTEGER DEFAULT 1,
     spawn_end_day INTEGER DEFAULT 31,
+    spawn_periods_by_zone JSONB DEFAULT '{}',
     region_ids UUID[] DEFAULT '{}',
     bait_recommendations JSONB DEFAULT '{}',
     lure_recommendations JSONB DEFAULT '{}',
+    pre_spawn_days INTEGER DEFAULT 14,
+    post_spawn_days INTEGER DEFAULT 5,
+    moon_phase_preference VARCHAR(20) DEFAULT 'neutral' CHECK (moon_phase_preference IN ('new_moon', 'full_moon', 'both', 'neutral')),
+    turbidity_sensitive BOOLEAN DEFAULT false,
+    uv_sensitivity NUMERIC(3, 2) DEFAULT 0.3,
+    water_level_sensitivity NUMERIC(3, 2) DEFAULT 0.3,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -255,3 +264,29 @@ CREATE INDEX idx_fish_bite_settings_regions ON fish_bite_settings USING GIN(regi
 CREATE INDEX idx_forecast_region_date ON fishing_forecasts(region_id, forecast_date);
 CREATE INDEX idx_forecast_fish ON fishing_forecasts(fish_type_id);
 CREATE INDEX idx_forecast_date_score ON fishing_forecasts(forecast_date, bite_score DESC);
+
+-- ============================================
+-- USER CATCH REPORTS (feedback)
+-- ============================================
+
+CREATE TABLE user_catch_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    region_id UUID NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
+    fish_type_id UUID NOT NULL REFERENCES fish_types(id) ON DELETE CASCADE,
+    forecast_date DATE NOT NULL,
+    time_of_day VARCHAR(20) NOT NULL CHECK (time_of_day IN ('morning', 'day', 'evening', 'night')),
+    actual_bite BOOLEAN NOT NULL,
+    bite_count INTEGER,
+    predicted_score INTEGER,
+    weather_temperature NUMERIC(5, 2),
+    weather_pressure INTEGER,
+    weather_wind_speed NUMERIC(5, 2),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_weather_water_temp ON weather_data(region_id, forecast_date) WHERE water_temperature IS NOT NULL;
+CREATE INDEX idx_catch_reports_user ON user_catch_reports(user_id);
+CREATE INDEX idx_catch_reports_region_fish ON user_catch_reports(region_id, fish_type_id);
+CREATE INDEX idx_catch_reports_date ON user_catch_reports(forecast_date);
+CREATE INDEX idx_catch_reports_created ON user_catch_reports(created_at);

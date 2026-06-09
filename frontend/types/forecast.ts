@@ -13,15 +13,27 @@ export interface RegionsResponse {
   total: number;
 }
 
+export interface SolunarPeriod {
+  start: string;
+  end: string;
+  period_type: 'major' | 'minor';
+  strength: number;
+}
+
 export interface WeatherSummary {
   temperature: number | null;
   pressure: number | null;
   wind_speed: number | null;
   precipitation: number | null;
   moon_phase: number | null;
+  moon_phase_name: string | null;
+  moon_illumination: number | null;
   sunrise: string | null;
   sunset: string | null;
   timezone?: string;
+  solunar_periods: SolunarPeriod[] | null;
+  pressure_trend_direction: 'rising' | 'falling' | 'stable' | null;
+  pressure_stability: number | null;
 }
 
 export interface FishTypeBrief {
@@ -32,20 +44,46 @@ export interface FishTypeBrief {
   is_typical_for_region?: boolean;
 }
 
+export interface CalculationDetails {
+  base: number;
+  solunar_synergy: number;
+  temp_pressure_synergy: number;
+  stability_mult: number;
+  time_adjusted: number;
+  wind_cap: number;
+  precip_cap: number;
+  uv_cap: number;
+  turbidity_cap: number;
+  water_level_cap: number;
+  phase_mult: number;
+  season_mult: number;
+}
+
 export interface TimeOfDayForecast {
   time_of_day: 'morning' | 'day' | 'evening' | 'night';
   bite_score: number;
+  is_spawn_period?: boolean;
+  spawn_message?: string | null;
+  spawn_phase?: string | null;
   temperature_score: number | null;
   pressure_score: number | null;
   wind_score: number | null;
   moon_score: number | null;
   precipitation_score: number | null;
+  uv_score?: number | null;
+  turbidity_score?: number | null;
+  water_level_score?: number | null;
   recommendation: string | null;
   best_baits: string[] | null;
   best_depth: string | null;
   recommended_baits: string[] | null;
   recommended_lures: string[] | null;
   current_season: string | null;
+  solunar_periods: SolunarPeriod[] | null;
+  pressure_trend_direction: 'rising' | 'falling' | 'stable' | null;
+  pressure_stability: number | null;
+  is_solunar_peak: boolean | null;
+  calculation_details: CalculationDetails | null;
 }
 
 export interface FishForecast {
@@ -113,9 +151,11 @@ export const MOON_PHASE_LABELS: Record<string, string> = {
   0.75: 'Последняя четверть',
 };
 
-export function getMoonPhaseLabel(phase: number | null): string {
-  if (phase === null) return '';
+export function getMoonPhaseLabel(phase: number | null, phaseName?: string | null): string {
+  if (phase === null || phase === undefined) return '';
   
+  if (phaseName) return phaseName;
+
   if (phase < 0.1 || phase > 0.9) return 'Новолуние 🌑';
   if (phase >= 0.1 && phase < 0.2) return 'Молодая луна 🌒';
   if (phase >= 0.2 && phase < 0.35) return 'Первая четверть 🌓';
@@ -157,10 +197,11 @@ export function getMoonPhaseType(phase: number | null): string {
   return 'Убывающая';
 }
 
-export function getMoonPhaseTooltip(phase: number | null): string {
+export function getMoonPhaseTooltip(phase: number | null, illumination?: number | null): string {
   if (phase === null) return '';
   
   const type = getMoonPhaseType(phase);
+  const illumText = illumination !== null && illumination !== undefined ? ` Освещённость: ${Math.round(illumination)}%.` : '';
   
   const tooltips: Record<string, string> = {
     'Новолуние': '🌑 Новолуние. Хорошее время для ночной рыбалки. Рыба активна.',
@@ -169,7 +210,35 @@ export function getMoonPhaseTooltip(phase: number | null): string {
     'Убывающая': '🌗 Убывающая луна. Хороший клев белой рыбы.',
   };
   
-  return tooltips[type] || '';
+  return (tooltips[type] || '') + illumText;
+}
+
+export function getPressureTrendIcon(direction: string | null | undefined): string {
+  if (!direction) return '';
+  if (direction === 'rising') return '↑';
+  if (direction === 'falling') return '↓';
+  return '→';
+}
+
+export function getPressureTrendColor(direction: string | null | undefined): string {
+  if (!direction) return '';
+  if (direction === 'rising') return 'text-green-500';
+  if (direction === 'falling') return 'text-red-500';
+  return 'text-gray-500';
+}
+
+export function getPressureTrendLabel(direction: string | null | undefined): string {
+  if (!direction) return '';
+  if (direction === 'rising') return 'Растёт';
+  if (direction === 'falling') return 'Падает';
+  return 'Стабильное';
+}
+
+export function formatSolunarPeriods(periods: SolunarPeriod[] | null | undefined): string {
+  if (!periods || periods.length === 0) return '';
+  return periods
+    .map(p => `${p.period_type === 'major' ? '⭐' : '🔹'} ${p.start}-${p.end}`)
+    .join(', ');
 }
 
 export interface AvailableDatesResponse {
@@ -182,4 +251,27 @@ export interface DaySummaryResponse {
   temperature: number | null;
   weather_icon: string | null;
   wind_speed: number | null;
+}
+
+export interface FeedbackRequest {
+  region_id: string;
+  fish_type_id: string;
+  forecast_date: string;
+  time_of_day: 'morning' | 'day' | 'evening' | 'night';
+  actual_bite: boolean;
+  bite_count?: number;
+  predicted_score?: number;
+  weather_temperature?: number;
+  weather_pressure?: number;
+  weather_wind_speed?: number;
+}
+
+export interface FeedbackResponse {
+  status: string;
+  message: string;
+}
+
+export interface AccuracyResponse {
+  total_reports: number;
+  accuracy: number | null;
 }

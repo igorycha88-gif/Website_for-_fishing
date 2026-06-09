@@ -1,0 +1,118 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - navigation [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img [ref=e6]
+          - generic [ref=e12]: Рыбалка
+        - generic [ref=e13]:
+          - link "Главная" [ref=e14] [cursor=pointer]:
+            - /url: /
+          - link "Карта" [ref=e15] [cursor=pointer]:
+            - /url: /map
+          - link "Прогноз" [ref=e16] [cursor=pointer]:
+            - /url: /forecast
+          - link "Магазин" [ref=e17] [cursor=pointer]:
+            - /url: /shop
+          - link "Базы отдыха" [ref=e18] [cursor=pointer]:
+            - /url: /resorts
+          - link "Магазины" [ref=e19] [cursor=pointer]:
+            - /url: /stores
+        - generic [ref=e21]:
+          - link "Войти" [ref=e22] [cursor=pointer]:
+            - /url: /login
+            - button "Войти" [ref=e23]:
+              - img [ref=e24]
+              - text: Войти
+          - link "Регистрация" [ref=e27] [cursor=pointer]:
+            - /url: /register
+            - button "Регистрация" [ref=e28]:
+              - img [ref=e29]
+              - text: Регистрация
+  - main [ref=e32]:
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - img [ref=e37]
+        - heading "Вход" [level=1] [ref=e40]
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e43]: Email
+          - generic [ref=e44]:
+            - img [ref=e45]
+            - textbox "your@email.com" [ref=e48]
+        - generic [ref=e49]:
+          - generic [ref=e50]: Пароль
+          - generic [ref=e51]:
+            - img [ref=e52]
+            - textbox "••••••••" [ref=e55]
+        - button "Войти" [ref=e56] [cursor=pointer]
+      - paragraph [ref=e57]:
+        - text: Нет аккаунта?
+        - link "Зарегистрироваться" [ref=e58] [cursor=pointer]:
+          - /url: /register
+  - contentinfo [ref=e59]:
+    - generic [ref=e60]:
+      - generic [ref=e61]:
+        - generic [ref=e62]:
+          - generic [ref=e63]:
+            - img [ref=e64]
+            - generic [ref=e70]: Рыбалка
+          - paragraph [ref=e71]: Найди лучшие места для рыбалки. Интерактивная карта, прогноз клёва, магазин снастей и базы отдыха.
+        - generic [ref=e72]:
+          - heading "Навигация" [level=3] [ref=e73]
+          - list [ref=e74]:
+            - listitem [ref=e75]:
+              - link "Главная" [ref=e76] [cursor=pointer]:
+                - /url: /
+                - img [ref=e77]
+                - text: Главная
+            - listitem [ref=e80]:
+              - link "Карта мест" [ref=e81] [cursor=pointer]:
+                - /url: /map
+                - img [ref=e82]
+                - text: Карта мест
+            - listitem [ref=e85]:
+              - link "Прогноз клёва" [ref=e86] [cursor=pointer]:
+                - /url: /forecast
+                - img [ref=e87]
+                - text: Прогноз клёва
+            - listitem [ref=e93]:
+              - link "Магазин" [ref=e94] [cursor=pointer]:
+                - /url: /shop
+                - img [ref=e95]
+                - text: Магазин
+        - generic [ref=e98]:
+          - heading "Контакты" [level=3] [ref=e99]
+          - list [ref=e100]:
+            - listitem [ref=e101]:
+              - img [ref=e102]
+              - link "+7 (900) 123-45-67" [ref=e104] [cursor=pointer]:
+                - /url: tel:+79001234567
+            - listitem [ref=e105]:
+              - img [ref=e106]
+              - link "info@rybalka.ru" [ref=e109] [cursor=pointer]:
+                - /url: mailto:info@rybalka.ru
+        - generic [ref=e110]:
+          - heading "Социальные сети" [level=3] [ref=e111]
+          - generic [ref=e112]:
+            - link [ref=e113] [cursor=pointer]:
+              - /url: "#"
+              - img [ref=e114]
+            - link [ref=e116] [cursor=pointer]:
+              - /url: "#"
+              - img [ref=e117]
+            - link [ref=e120] [cursor=pointer]:
+              - /url: "#"
+              - img [ref=e121]
+      - generic [ref=e124]:
+        - paragraph [ref=e125]: © 2025 Рыбалка. Все права защищены.
+        - generic [ref=e126]:
+          - link "Политика конфиденциальности" [ref=e127] [cursor=pointer]:
+            - /url: /privacy
+          - link "Условия использования" [ref=e128] [cursor=pointer]:
+            - /url: /terms
+  - alert [ref=e129]
+```

@@ -7,20 +7,33 @@ from app.services.forecast_calculation import (
     TimeOfDay,
     WeatherConditions,
     FishSettings,
+    PressureTrend,
+    SpawnPhase,
     get_time_of_day,
+    get_time_of_day_dynamic,
+    get_season,
     calculate_temperature_score,
     calculate_pressure_score,
+    calculate_pressure_trend,
     calculate_wind_score,
     calculate_moon_score,
     calculate_precipitation_score,
     calculate_time_score,
     get_season_multiplier,
     is_in_spawn_period,
+    get_spawn_phase,
     calculate_bite_score,
     generate_recommendation,
     get_best_baits,
     get_best_depth,
     get_seasonal_recommendations,
+    get_climate_zone,
+    get_spawn_dates_for_zone,
+    calculate_uv_score,
+    calculate_turbidity_score,
+    calculate_water_level_score,
+    estimate_water_temperature,
+    REGION_CODE_TO_ZONE,
     WINTER_MONTHLY_MULTIPLIERS,
 )
 
@@ -230,10 +243,22 @@ class TestCalculatePressureScore:
         assert score >= 100
 
     def test_pressure_with_falling_trend(self, fish_settings):
+        from app.services.forecast_calculation import PressureTrend
+
+        trend_data = PressureTrend(
+            trend_3h=-3.0,
+            trend_6h=-5.0,
+            trend_12h=-8.0,
+            trend_24h=-12.0,
+            stability=0.2,
+            rate_of_change=-1.0,
+            direction="falling",
+        )
         weather = WeatherConditions(
             temperature=Decimal("10"),
             pressure_hpa=1010,
             pressure_trend=Decimal("-5"),
+            pressure_trend_data=trend_data,
             wind_speed=Decimal("3"),
             wind_direction=180,
             cloudiness=50,
@@ -1004,3 +1029,958 @@ class TestGetSeasonalRecommendations:
                 fish_settings, season, "predatory"
             )
             assert lures == expected
+
+
+class TestCalculatePressureTrend:
+    def test_stable_pressure(self):
+        records = [(0, 1013), (3, 1013), (6, 1014), (9, 1013), (12, 1013), (15, 1013), (18, 1013), (21, 1013)]
+        trend = calculate_pressure_trend(records)
+        assert trend.direction == "stable"
+        assert trend.stability > 0.8
+
+    def test_rising_pressure(self):
+        records = [(0, 1005), (3, 1007), (6, 1009), (9, 1011), (12, 1013), (15, 1015), (18, 1017), (21, 1019)]
+        trend = calculate_pressure_trend(records)
+        assert trend.direction == "rising"
+        assert trend.rate_of_change > 0
+
+    def test_falling_pressure(self):
+        records = [(0, 1020), (3, 1018), (6, 1016), (9, 1014), (12, 1012), (15, 1010), (18, 1008), (21, 1006)]
+        trend = calculate_pressure_trend(records)
+        assert trend.direction == "falling"
+        assert trend.rate_of_change < 0
+
+    def test_unstable_pressure(self):
+        records = [(0, 1013), (3, 1000), (6, 1025), (9, 995), (12, 1030)]
+        trend = calculate_pressure_trend(records)
+        assert trend.stability < 0.5
+
+    def test_single_record_returns_default(self):
+        records = [(12, 1013)]
+        trend = calculate_pressure_trend(records)
+        assert trend.direction == "stable"
+
+    def test_empty_records_returns_default(self):
+        trend = calculate_pressure_trend([])
+        assert trend.direction == "stable"
+        assert trend.stability == 1.0
+
+    def test_trend_values_in_mmhg(self):
+        records = [(0, 1013), (3, 1013), (6, 1020)]
+        trend = calculate_pressure_trend(records)
+        assert trend.trend_3h != 0
+
+
+class TestGetSeason:
+    def test_spring(self):
+        assert get_season(3) == "spring"
+        assert get_season(4) == "spring"
+        assert get_season(5) == "spring"
+
+    def test_summer(self):
+        assert get_season(6) == "summer"
+        assert get_season(7) == "summer"
+        assert get_season(8) == "summer"
+
+    def test_autumn(self):
+        assert get_season(9) == "autumn"
+        assert get_season(10) == "autumn"
+        assert get_season(11) == "autumn"
+
+    def test_winter(self):
+        assert get_season(12) == "winter"
+        assert get_season(1) == "winter"
+        assert get_season(2) == "winter"
+
+
+class TestMoonScoreV3:
+    def test_moon_score_with_season(self, fish_settings):
+        weather_summer = WeatherConditions(moon_phase=Decimal("0.0"))
+        score_summer = calculate_moon_score(weather_summer, fish_settings, "summer")
+
+        weather_winter = WeatherConditions(moon_phase=Decimal("0.0"))
+        score_winter = calculate_moon_score(weather_winter, fish_settings, "winter")
+
+        assert score_winter >= score_summer
+
+    def test_moon_score_with_solunar_major(self, fish_settings):
+        weather_no_solunar = WeatherConditions(
+            moon_phase=Decimal("0.0"),
+            is_solunar_major=False,
+        )
+        weather_solunar_major = WeatherConditions(
+            moon_phase=Decimal("0.0"),
+            is_solunar_major=True,
+            solunar_strength=0.9,
+        )
+        score_normal = calculate_moon_score(weather_no_solunar, fish_settings, "spring")
+        score_solunar = calculate_moon_score(weather_solunar_major, fish_settings, "spring")
+        assert score_solunar > score_normal
+
+    def test_moon_score_with_solunar_minor(self, fish_settings):
+        weather_solunar_minor = WeatherConditions(
+            moon_phase=Decimal("0.25"),
+            is_solunar_minor=True,
+            solunar_strength=0.6,
+        )
+        weather_normal = WeatherConditions(
+            moon_phase=Decimal("0.25"),
+        )
+        score_minor = calculate_moon_score(weather_solunar_minor, fish_settings, "spring")
+        score_normal = calculate_moon_score(weather_normal, fish_settings, "spring")
+        assert score_minor > score_normal
+
+
+class TestPressureScoreV3:
+    def test_pressure_with_stable_trend(self, fish_settings):
+        trend = PressureTrend(
+            stability=0.9,
+            rate_of_change=0.1,
+            direction="stable",
+        )
+        weather = WeatherConditions(
+            pressure_hpa=1013,
+            pressure_trend_data=trend,
+        )
+        score = calculate_pressure_score(weather, fish_settings)
+        assert score >= 100
+
+    def test_pressure_with_rapid_change(self, fish_settings):
+        trend = PressureTrend(
+            stability=0.2,
+            rate_of_change=3.0,
+            direction="rising",
+        )
+        weather = WeatherConditions(
+            pressure_hpa=1013,
+            pressure_trend_data=trend,
+        )
+        score = calculate_pressure_score(weather, fish_settings)
+        assert score < 100
+
+    def test_pressure_without_trend_data(self, fish_settings):
+        weather = WeatherConditions(
+            pressure_hpa=1013,
+            pressure_trend_data=None,
+        )
+        score = calculate_pressure_score(weather, fish_settings)
+        assert score == 100.0
+
+
+class TestMultiplicativeModel:
+    def test_perfect_conditions_high_score(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            wind_direction=200,
+            cloudiness=60,
+            precipitation_mm=Decimal("0"),
+            moon_phase=Decimal("0.0"),
+            is_solunar_major=True,
+            solunar_strength=0.9,
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
+        )
+        assert result["bite_score"] >= 60
+
+    def test_one_bad_factor_reduces_score(self, fish_settings):
+        weather_good = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            wind_direction=200,
+            cloudiness=60,
+            precipitation_mm=Decimal("0"),
+            moon_phase=Decimal("0.5"),
+        )
+        weather_bad_wind = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("20"),
+            wind_direction=0,
+            cloudiness=100,
+            precipitation_mm=Decimal("15"),
+            moon_phase=Decimal("0.5"),
+        )
+        result_good = calculate_bite_score(
+            weather_good, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
+        )
+        result_bad = calculate_bite_score(
+            weather_bad_wind, fish_settings, hour=14, month=6, check_date=date(2025, 6, 15)
+        )
+        assert result_good["bite_score"] > result_bad["bite_score"]
+
+    def test_spawn_overrides_everything(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            is_solunar_major=True,
+            solunar_strength=1.0,
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=3, check_date=date(2025, 3, 15)
+        )
+        assert result["bite_score"] == 0
+        assert result["is_spawn_period"] is True
+
+    def test_score_always_in_range(self, fish_settings):
+        for temp in [-20, 0, 15, 40]:
+            for pressure in [950, 1013, 1050]:
+                for wind in [0, 5, 20]:
+                    weather = WeatherConditions(
+                        temperature=Decimal(str(temp)),
+                        pressure_hpa=pressure,
+                        wind_speed=Decimal(str(wind)),
+                    )
+                    result = calculate_bite_score(
+                        weather, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
+                    )
+                    assert 0 <= result["bite_score"] <= 100, f"Score out of range for temp={temp}, pressure={pressure}, wind={wind}"
+
+
+class TestGenerateRecommendationV3:
+    def test_stable_pressure_recommendation(self, fish_settings):
+        trend = PressureTrend(stability=0.9, rate_of_change=0.1, direction="stable")
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            pressure_trend_data=trend,
+        )
+        rec = generate_recommendation(85, weather, fish_settings)
+        assert "Стабильное давление" in rec
+
+    def test_unstable_pressure_recommendation(self, fish_settings):
+        trend = PressureTrend(stability=0.1, rate_of_change=2.5, direction="falling")
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            pressure_trend_data=trend,
+        )
+        rec = generate_recommendation(40, weather, fish_settings)
+        assert "нестабильно" in rec or "снижен" in rec
+
+    def test_solunar_recommendation(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            is_solunar_major=True,
+        )
+        rec = generate_recommendation(80, weather, fish_settings)
+        assert "Solunar major" in rec
+
+    def test_new_moon_recommendation(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            moon_phase=Decimal("0.02"),
+        )
+        rec = generate_recommendation(80, weather, fish_settings)
+        assert "Новолуние" in rec
+
+    def test_full_moon_recommendation(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("2"),
+            moon_phase=Decimal("0.5"),
+        )
+        rec = generate_recommendation(80, weather, fish_settings)
+        assert "Полнолуние" in rec
+
+
+class TestGetClimateZone:
+    def test_south_zone(self):
+        assert get_climate_zone("KDA") == "south"
+        assert get_climate_zone("AST") == "south"
+        assert get_climate_zone("ROS") == "south"
+        assert get_climate_zone("VGG") == "south"
+
+    def test_central_zone(self):
+        assert get_climate_zone("MOW") == "central"
+        assert get_climate_zone("MOS") == "central"
+        assert get_climate_zone("VLG") == "central"
+
+    def test_north_zone(self):
+        assert get_climate_zone("KR") == "north"
+        assert get_climate_zone("KO") == "north"
+        assert get_climate_zone("MUR") == "north"
+        assert get_climate_zone("KYA") == "north"
+        assert get_climate_zone("KAM") == "north"
+
+    def test_unknown_code_returns_central(self):
+        assert get_climate_zone("UNKNOWN") == "central"
+
+    def test_all_codes_mapped(self):
+        assert len(REGION_CODE_TO_ZONE) > 0
+        for code, zone in REGION_CODE_TO_ZONE.items():
+            assert zone in ("south", "central", "north"), f"Invalid zone for {code}: {zone}"
+
+
+class TestGetSpawnDatesForZone:
+    @pytest.fixture
+    def pike_zones(self):
+        return {
+            "south": {"spawn_start_month": 2, "spawn_end_month": 3, "spawn_start_day": 15, "spawn_end_day": 25},
+            "central": {"spawn_start_month": 3, "spawn_end_month": 4, "spawn_start_day": 1, "spawn_end_day": 20},
+            "north": {"spawn_start_month": 4, "spawn_end_month": 5, "spawn_start_day": 1, "spawn_end_day": 31},
+        }
+
+    def test_south_zone(self, pike_zones):
+        result = get_spawn_dates_for_zone(pike_zones, "south")
+        assert result == (2, 3, 15, 25)
+
+    def test_central_zone(self, pike_zones):
+        result = get_spawn_dates_for_zone(pike_zones, "central")
+        assert result == (3, 4, 1, 20)
+
+    def test_north_zone(self, pike_zones):
+        result = get_spawn_dates_for_zone(pike_zones, "north")
+        assert result == (4, 5, 1, 31)
+
+    def test_unknown_zone_returns_none(self, pike_zones):
+        result = get_spawn_dates_for_zone(pike_zones, "east")
+        assert result is None
+
+    def test_none_input_returns_none(self):
+        result = get_spawn_dates_for_zone(None, "central")
+        assert result is None
+
+    def test_empty_dict_returns_none(self):
+        result = get_spawn_dates_for_zone({}, "central")
+        assert result is None
+
+
+class TestIsInSpawnPeriodZoned:
+    def test_pike_south_february_in_spawn(self):
+        south_pike = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Щука",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.4"),
+            active_in_winter=True,
+            spawn_start_month=2,
+            spawn_end_month=3,
+            spawn_start_day=15,
+            spawn_end_day=25,
+        )
+        is_spawn, msg = is_in_spawn_period(south_pike, date(2026, 2, 20))
+        assert is_spawn is True
+
+    def test_pike_south_march_10_in_spawn(self):
+        south_pike = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Щука",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.4"),
+            active_in_winter=True,
+            spawn_start_month=2,
+            spawn_end_month=3,
+            spawn_start_day=15,
+            spawn_end_day=25,
+        )
+        is_spawn, msg = is_in_spawn_period(south_pike, date(2026, 3, 10))
+        assert is_spawn is True
+
+    def test_pike_south_march_30_not_spawn(self):
+        south_pike = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Щука",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.4"),
+            active_in_winter=True,
+            spawn_start_month=2,
+            spawn_end_month=3,
+            spawn_start_day=15,
+            spawn_end_day=25,
+        )
+        is_spawn, _ = is_in_spawn_period(south_pike, date(2026, 3, 30))
+        assert is_spawn is False
+
+    def test_pike_north_april_in_spawn(self):
+        north_pike = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Щука",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.4"),
+            active_in_winter=True,
+            spawn_start_month=4,
+            spawn_end_month=5,
+            spawn_start_day=1,
+            spawn_end_day=31,
+        )
+        is_spawn, msg = is_in_spawn_period(north_pike, date(2026, 4, 15))
+        assert is_spawn is True
+
+    def test_pike_north_march_not_spawn(self):
+        north_pike = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Щука",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.4"),
+            active_in_winter=True,
+            spawn_start_month=4,
+            spawn_end_month=5,
+            spawn_start_day=1,
+            spawn_end_day=31,
+        )
+        is_spawn, _ = is_in_spawn_period(north_pike, date(2026, 3, 15))
+        assert is_spawn is False
+
+    def test_nalim_south_november_in_spawn(self):
+        south_nalim = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Налим",
+            optimal_temp_min=Decimal("-2"),
+            optimal_temp_max=Decimal("12"),
+            optimal_pressure_min=750,
+            optimal_pressure_max=760,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=False,
+            prefer_evening=False,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.7"),
+            active_in_winter=True,
+            spawn_start_month=11,
+            spawn_end_month=12,
+            spawn_start_day=15,
+            spawn_end_day=31,
+        )
+        is_spawn, msg = is_in_spawn_period(south_nalim, date(2026, 11, 20))
+        assert is_spawn is True
+
+    def test_spawn_message_contains_zone_dates(self):
+        zone_fish = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Щука",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.4"),
+            active_in_winter=True,
+            spawn_start_month=4,
+            spawn_end_month=5,
+            spawn_start_day=1,
+            spawn_end_day=31,
+        )
+        _, msg = is_in_spawn_period(zone_fish, date(2026, 4, 15))
+        assert "1 апреля" in msg
+        assert "31 мая" in msg
+
+
+class TestIsInSpawnPeriodYearBoundaryDays:
+    @pytest.fixture
+    def nalim_central(self):
+        return FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Налим",
+            optimal_temp_min=Decimal("-2"),
+            optimal_temp_max=Decimal("12"),
+            optimal_pressure_min=750,
+            optimal_pressure_max=760,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=False,
+            prefer_evening=False,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.7"),
+            active_in_winter=True,
+            spawn_start_month=12,
+            spawn_end_month=2,
+            spawn_start_day=1,
+            spawn_end_day=15,
+        )
+
+    def test_year_boundary_dec_1_is_spawn(self, nalim_central):
+        is_spawn, _ = is_in_spawn_period(nalim_central, date(2026, 12, 1))
+        assert is_spawn is True
+
+    def test_year_boundary_nov_30_not_spawn(self, nalim_central):
+        is_spawn, _ = is_in_spawn_period(nalim_central, date(2026, 11, 30))
+        assert is_spawn is False
+
+    def test_year_boundary_feb_15_is_spawn(self, nalim_central):
+        is_spawn, _ = is_in_spawn_period(nalim_central, date(2026, 2, 15))
+        assert is_spawn is True
+
+    def test_year_boundary_feb_16_not_spawn(self, nalim_central):
+        is_spawn, _ = is_in_spawn_period(nalim_central, date(2026, 2, 16))
+        assert is_spawn is False
+
+    def test_year_boundary_jan_mid_is_spawn(self, nalim_central):
+        is_spawn, _ = is_in_spawn_period(nalim_central, date(2026, 1, 15))
+        assert is_spawn is True
+
+    def test_year_boundary_dec_31_is_spawn(self, nalim_central):
+        is_spawn, _ = is_in_spawn_period(nalim_central, date(2026, 12, 31))
+        assert is_spawn is True
+
+    @pytest.fixture
+    def nalim_south(self):
+        return FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Налим",
+            optimal_temp_min=Decimal("-2"),
+            optimal_temp_max=Decimal("12"),
+            optimal_pressure_min=750,
+            optimal_pressure_max=760,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=False,
+            prefer_evening=False,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.7"),
+            active_in_winter=True,
+            spawn_start_month=11,
+            spawn_end_month=12,
+            spawn_start_day=15,
+            spawn_end_day=31,
+        )
+
+    def test_nalim_south_nov_14_not_spawn(self, nalim_south):
+        is_spawn, _ = is_in_spawn_period(nalim_south, date(2026, 11, 14))
+        assert is_spawn is False
+
+    def test_nalim_south_nov_15_is_spawn(self, nalim_south):
+        is_spawn, _ = is_in_spawn_period(nalim_south, date(2026, 11, 15))
+        assert is_spawn is True
+
+    def test_nalim_south_dec_31_is_spawn(self, nalim_south):
+        is_spawn, _ = is_in_spawn_period(nalim_south, date(2026, 12, 31))
+        assert is_spawn is True
+
+
+class TestGetTimeOfDayDynamic:
+    def test_dynamic_morning_with_sunrise(self):
+        sunrise = time(5, 30)
+        sunset = time(21, 0)
+        assert get_time_of_day_dynamic(5, sunrise, sunset) == TimeOfDay.MORNING
+        assert get_time_of_day_dynamic(7, sunrise, sunset) == TimeOfDay.MORNING
+
+    def test_dynamic_day_with_sunrise(self):
+        sunrise = time(5, 30)
+        sunset = time(21, 0)
+        assert get_time_of_day_dynamic(10, sunrise, sunset) == TimeOfDay.DAY
+        assert get_time_of_day_dynamic(15, sunrise, sunset) == TimeOfDay.DAY
+
+    def test_dynamic_evening_with_sunset(self):
+        sunrise = time(5, 30)
+        sunset = time(21, 0)
+        assert get_time_of_day_dynamic(19, sunrise, sunset) == TimeOfDay.EVENING
+        assert get_time_of_day_dynamic(21, sunrise, sunset) == TimeOfDay.EVENING
+
+    def test_dynamic_night(self):
+        sunrise = time(5, 30)
+        sunset = time(21, 0)
+        assert get_time_of_day_dynamic(23, sunrise, sunset) == TimeOfDay.NIGHT
+        assert get_time_of_day_dynamic(3, sunrise, sunset) == TimeOfDay.NIGHT
+
+    def test_fallback_without_sunrise_sunset(self):
+        assert get_time_of_day_dynamic(7, None, None) == TimeOfDay.MORNING
+        assert get_time_of_day_dynamic(14, None, None) == TimeOfDay.DAY
+
+    def test_winter_short_day(self):
+        sunrise = time(9, 0)
+        sunset = time(16, 0)
+        assert get_time_of_day_dynamic(7, sunrise, sunset) == TimeOfDay.NIGHT
+        assert get_time_of_day_dynamic(10, sunrise, sunset) == TimeOfDay.MORNING
+        assert get_time_of_day_dynamic(12, sunrise, sunset) == TimeOfDay.DAY
+        assert get_time_of_day_dynamic(15, sunrise, sunset) == TimeOfDay.EVENING
+
+
+class TestGetSpawnPhase:
+    def test_in_spawn_period(self, fish_settings):
+        phase, msg = get_spawn_phase(fish_settings, date(2025, 3, 15))
+        assert phase == SpawnPhase.SPAWN
+
+    def test_pre_spawn_period(self, fish_settings):
+        phase, msg = get_spawn_phase(fish_settings, date(2025, 2, 20))
+        assert phase == SpawnPhase.PRE_SPAWN
+        assert "жор" in msg.lower() or "активность" in msg.lower()
+
+    def test_post_spawn_period(self, fish_settings):
+        phase, msg = get_spawn_phase(fish_settings, date(2025, 5, 5))
+        assert phase == SpawnPhase.POST_SPAWN
+        assert "восстанавливается" in msg.lower() or "посленерестовый" in msg.lower()
+
+    def test_normal_period(self, fish_settings):
+        phase, msg = get_spawn_phase(fish_settings, date(2025, 6, 15))
+        assert phase == SpawnPhase.NORMAL
+
+    def test_no_spawn_info(self, fish_no_spawn):
+        phase, msg = get_spawn_phase(fish_no_spawn, date(2025, 5, 15))
+        assert phase == SpawnPhase.NORMAL
+
+
+class TestCalculateUVScore:
+    def test_no_uv_data(self, fish_settings):
+        weather = WeatherConditions()
+        score = calculate_uv_score(weather, fish_settings)
+        assert score == 85.0
+
+    def test_low_uv(self, fish_settings):
+        weather = WeatherConditions(uv_index=Decimal("1.5"))
+        score = calculate_uv_score(weather, fish_settings)
+        assert score == 95.0
+
+    def test_moderate_uv(self, fish_settings):
+        weather = WeatherConditions(uv_index=Decimal("4.0"))
+        score = calculate_uv_score(weather, fish_settings)
+        assert score == 75.0
+
+    def test_high_uv(self, fish_settings):
+        weather = WeatherConditions(uv_index=Decimal("7.0"))
+        score = calculate_uv_score(weather, fish_settings)
+        assert score == 50.0
+
+    def test_very_high_uv(self, fish_settings):
+        weather = WeatherConditions(uv_index=Decimal("10.0"))
+        score = calculate_uv_score(weather, fish_settings)
+        assert score == 30.0
+
+
+class TestCalculateTurbidityScore:
+    def test_calm_clear(self, fish_settings):
+        weather = WeatherConditions(
+            wind_speed=Decimal("2"),
+            precipitation_mm=Decimal("0"),
+        )
+        score = calculate_turbidity_score(weather, fish_settings)
+        assert score >= 90
+
+    def test_windy_rainy(self, fish_settings):
+        weather = WeatherConditions(
+            wind_speed=Decimal("15"),
+            precipitation_mm=Decimal("10"),
+        )
+        score = calculate_turbidity_score(weather, fish_settings)
+        assert score < 50
+
+    def test_turbidity_sensitive_fish(self):
+        fish = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Форель",
+            optimal_temp_min=Decimal("6"),
+            optimal_temp_max=Decimal("18"),
+            optimal_pressure_min=758,
+            optimal_pressure_max=770,
+            max_wind_speed=Decimal("6"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.6"),
+            active_in_winter=False,
+            turbidity_sensitive=True,
+        )
+        weather = WeatherConditions(
+            wind_speed=Decimal("10"),
+            precipitation_mm=Decimal("5"),
+        )
+        score = calculate_turbidity_score(weather, fish)
+        assert score < 60
+
+
+class TestCalculateWaterLevelScore:
+    def test_low_precip(self):
+        weather = WeatherConditions(precip_7d=Decimal("5"))
+        score = calculate_water_level_score(weather, "summer")
+        assert score >= 90
+
+    def test_moderate_precip(self):
+        weather = WeatherConditions(precip_7d=Decimal("15"))
+        score = calculate_water_level_score(weather, "summer")
+        assert 70 <= score <= 90
+
+    def test_high_precip_spring(self):
+        weather = WeatherConditions(precip_7d=Decimal("40"))
+        score = calculate_water_level_score(weather, "spring")
+        assert score < 50
+
+    def test_no_precip_data(self):
+        weather = WeatherConditions()
+        score = calculate_water_level_score(weather, "summer")
+        assert score == 85.0
+
+
+class TestMoonPhasePreference:
+    def test_full_moon_preference(self):
+        fish = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Судак",
+            optimal_temp_min=Decimal("8"),
+            optimal_temp_max=Decimal("25"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=770,
+            max_wind_speed=Decimal("6"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=False,
+            moon_sensitivity=Decimal("0.5"),
+            active_in_winter=False,
+            moon_phase_preference="full_moon",
+        )
+        weather_full = WeatherConditions(moon_phase=Decimal("0.5"))
+        weather_new = WeatherConditions(moon_phase=Decimal("0.0"))
+        score_full = calculate_moon_score(weather_full, fish, "summer")
+        score_new = calculate_moon_score(weather_new, fish, "summer")
+        assert score_full > score_new
+
+    def test_new_moon_preference(self):
+        fish = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Лещ",
+            optimal_temp_min=Decimal("8"),
+            optimal_temp_max=Decimal("24"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("6"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("0.5"),
+            active_in_winter=False,
+            moon_phase_preference="new_moon",
+        )
+        weather_new = WeatherConditions(moon_phase=Decimal("0.0"))
+        weather_full = WeatherConditions(moon_phase=Decimal("0.5"))
+        score_new = calculate_moon_score(weather_new, fish, "summer")
+        score_full = calculate_moon_score(weather_full, fish, "summer")
+        assert score_new > score_full
+
+
+class TestPrecipitationScoreWithWeatherCondition:
+    def test_thunderstorm_modifier(self):
+        weather = WeatherConditions(
+            precipitation_mm=Decimal("5"),
+            weather_condition="Thunderstorm",
+        )
+        score = calculate_precipitation_score(weather)
+        assert score < 50
+
+    def test_drizzle_modifier(self):
+        weather = WeatherConditions(
+            precipitation_mm=Decimal("1"),
+            weather_condition="Drizzle",
+        )
+        score = calculate_precipitation_score(weather)
+        assert score > 60
+
+    def test_rain_modifier(self):
+        weather = WeatherConditions(
+            precipitation_mm=Decimal("3"),
+            weather_condition="Rain",
+        )
+        score = calculate_precipitation_score(weather)
+        assert score > 50
+
+    def test_clear_modifier(self):
+        weather = WeatherConditions(
+            precipitation_mm=Decimal("0"),
+            weather_condition="Clear",
+        )
+        score = calculate_precipitation_score(weather)
+        assert score > 60
+
+
+class TestWindScoreWithGust:
+    def test_no_gust(self, fish_settings):
+        weather = WeatherConditions(
+            wind_speed=Decimal("4"),
+            wind_gust=None,
+        )
+        score = calculate_wind_score(weather, fish_settings)
+        assert score > 70
+
+    def test_moderate_gust(self, fish_settings):
+        weather = WeatherConditions(
+            wind_speed=Decimal("6"),
+            wind_gust=Decimal("12"),
+        )
+        score = calculate_wind_score(weather, fish_settings)
+        assert 30 < score <= 100
+
+    def test_extreme_gust(self, fish_settings):
+        weather = WeatherConditions(
+            wind_speed=Decimal("6"),
+            wind_gust=Decimal("25"),
+        )
+        score = calculate_wind_score(weather, fish_settings)
+        assert score < 60
+
+
+class TestEstimateWaterTemperature:
+    def test_summer_estimation(self):
+        result = estimate_water_temperature(25.0, None, "summer")
+        assert result < 25.0
+
+    def test_winter_estimation(self):
+        result = estimate_water_temperature(-5.0, None, "winter")
+        assert result < -5.0
+
+    def test_with_avg_temp(self):
+        result_avg = estimate_water_temperature(20.0, 18.0, "summer")
+        result_no_avg = estimate_water_temperature(20.0, None, "summer")
+        assert result_avg != result_no_avg
+
+
+class TestBiteScoreV5:
+    def test_water_temperature_used(self, fish_settings):
+        weather_air = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("3"),
+            moon_phase=Decimal("0.0"),
+        )
+        weather_water = WeatherConditions(
+            temperature=Decimal("15"),
+            water_temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("3"),
+            moon_phase=Decimal("0.0"),
+        )
+        result_air = calculate_bite_score(
+            weather_air, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
+        )
+        result_water = calculate_bite_score(
+            weather_water, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
+        )
+        assert 0 <= result_air["bite_score"] <= 100
+        assert 0 <= result_water["bite_score"] <= 100
+
+    def test_pre_spawn_boost(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("10"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("3"),
+            moon_phase=Decimal("0.0"),
+        )
+        result_normal = calculate_bite_score(
+            weather, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
+        )
+        result_pre_spawn = calculate_bite_score(
+            weather, fish_settings, hour=8, month=2, check_date=date(2025, 2, 20)
+        )
+        assert result_pre_spawn["spawn_phase"] == "pre_spawn"
+        assert result_pre_spawn["bite_score"] > 0
+
+    def test_accuracy_adjustment(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("3"),
+            moon_phase=Decimal("0.0"),
+        )
+        result_normal = calculate_bite_score(
+            weather, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15),
+            accuracy_adjustment=1.0,
+        )
+        result_boosted = calculate_bite_score(
+            weather, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15),
+            accuracy_adjustment=1.2,
+        )
+        assert result_boosted["bite_score"] >= result_normal["bite_score"]
+
+    def test_v5_new_fields_in_result(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("3"),
+            moon_phase=Decimal("0.0"),
+            uv_index=Decimal("4.0"),
+            precip_7d=Decimal("10"),
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
+        )
+        assert "uv_score" in result
+        assert "turbidity_score" in result
+        assert "water_level_score" in result
+        assert "spawn_phase" in result
+        assert result["spawn_phase"] == "normal"
+
+    def test_calculation_details_returned(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("3"),
+            moon_phase=Decimal("0.0"),
+            sunrise=time(7, 0),
+            sunset=time(18, 0),
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
+        )
+        assert "calculation_details" in result
+        details = result["calculation_details"]
+        assert details is not None
+        assert "base" in details
+        assert "solunar_synergy" in details
+        assert "temp_pressure_synergy" in details
+        assert "stability_mult" in details
+        assert "time_adjusted" in details
+        assert "wind_cap" in details
+        assert "precip_cap" in details
+        assert "uv_cap" in details
+        assert "turbidity_cap" in details
+        assert "water_level_cap" in details
+        assert "phase_mult" in details
+        assert "season_mult" in details
+        assert 0 <= details["base"] <= 100
+        assert details["wind_cap"] >= 0
+        assert details["precip_cap"] >= 0
+
+    def test_calculation_details_none_on_spawn(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("3"),
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=8, month=3, check_date=date(2025, 3, 15)
+        )
+        if result["is_spawn_period"]:
+            assert result["calculation_details"] is None

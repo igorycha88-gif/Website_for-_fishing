@@ -1,0 +1,172 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fishing_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - fishing-network
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - fishing-network
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      EMAIL_SERVICE_URL: http://email-service:8005
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@fishmap.ru}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    networks:
+      - fishing-network
+    depends_on:
+      - postgres
+      - redis
+      - email-service
+
+  places-service:
+    build:
+      context: ./services/places-service
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8001"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-in-production}
+      YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY:-dfb59053-0011-47fb-a6f1-a14efb9160d1}
+      AUTH_SERVICE_URL: http://auth-service:8001
+    networks:
+      - fishing-network
+    depends_on:
+      - postgres
+      - redis
+      - auth-service
+
+  reports-service:
+    build:
+      context: ./services/reports-service
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+    networks:
+      - fishing-network
+    depends_on:
+      - postgres
+      - redis
+
+  booking-service:
+    build:
+      context: ./services/booking-service
+      dockerfile: Dockerfile
+    ports:
+      - "8004:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+    networks:
+      - fishing-network
+    depends_on:
+      - postgres
+      - redis
+
+  shop-service:
+    build:
+      context: ./services/shop-service
+      dockerfile: Dockerfile
+    ports:
+      - "8005:8000"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+    networks:
+      - fishing-network
+    depends_on:
+      - postgres
+      - redis
+
+  email-service:
+    build:
+      context: ./services/email-service
+      dockerfile: Dockerfile
+    ports:
+      - "8006:8005"
+    environment:
+      SMTP_HOST: ${SMTP_HOST:-smtp.yandex.ru}
+      SMTP_PORT: ${SMTP_PORT:-465}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-FishMap}
+    networks:
+      - fishing-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost
+      NEXT_PUBLIC_MAPBOX_API_KEY: ${MAPBOX_API_KEY}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+    networks:
+      - fishing-network
+
+  admin-service:
+    build:
+      context: ./services/admin-service
+      dockerfile: Dockerfile
+    ports:
+      - "8007:8006"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      SECRET_KEY: ${SECRET_KEY}
+      AUTH_SERVICE_URL: http://auth-service:8001
+    networks:
+      - fishing-network
+    depends_on:
+      - postgres
+      - redis
+      - auth-service
+
+networks:
+  fishing-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

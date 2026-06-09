@@ -31,7 +31,9 @@ export function Hero() {
             transition={{ duration: 0.8, delay: 0.4 }}
             className="text-xl md:text-2xl text-white/80 mb-8"
           >
-            Интерактивная карта, прогноз клёва, магазин снастей и базы отдыха
+            {/* SHOP-HIDE: скрыто до появления юр. лица */}
+            Интерактивная карта и прогноз клёва для рыбаков
+            {/* Интерактивная карта, прогноз клёва, магазин снастей и базы отдыха */}
           </motion.p>
 
           <motion.div
@@ -57,7 +59,7 @@ export function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, delay: 0.8 }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8"
+            className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8"
           >
             <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
               <MapPin className="w-10 h-10 text-primary-sea mb-3 mx-auto" />
@@ -71,6 +73,7 @@ export function Hero() {
               <p className="text-white/60 text-sm">Точные прогнозы на неделю</p>
             </div>
 
+            {/* SHOP-HIDE: скрыто до появления юр. лица — карточка Магазин снастей
             <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
               <div className="w-10 h-10 text-accent-orange mb-3 mx-auto flex items-center justify-center">
                 <span className="text-2xl">🛒</span>
@@ -78,6 +81,7 @@ export function Hero() {
               <h3 className="text-white font-semibold mb-2">Магазин снастей</h3>
               <p className="text-white/60 text-sm">Всё для рыбалки в одном месте</p>
             </div>
+            */}
           </motion.div>
 
           <motion.div

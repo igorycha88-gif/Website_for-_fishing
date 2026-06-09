@@ -36,11 +36,6 @@ class Settings(BaseSettings):
     DEV_EMAIL_DOMAIN: str = "test.localhost"
     CORS_ORIGINS: str = ""
 
-    USE_VAULT: bool = False
-    VAULT_ADDR: str = "http://vault:8200"
-    VAULT_ROLE_ID: Optional[str] = None
-    VAULT_SECRET_ID: Optional[str] = None
-
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_LOGIN: str = "5/minute"
     RATE_LIMIT_REGISTER: str = "10/hour"
@@ -91,38 +86,8 @@ class Settings(BaseSettings):
         except Exception:
             return False
 
-    def load_secrets_from_vault(self) -> None:
-        if not self.USE_VAULT:
-            logger.debug("Vault disabled, using environment secrets")
-            return
-
-        try:
-            from vault_client import get_vault_client
-
-            vault = get_vault_client()
-
-            if not vault.is_available():
-                logger.warning("Vault not available, using environment secrets")
-                return
-
-            if not self.SECRET_KEY or self.SECRET_KEY == "your-secret-key-change-in-production-min-32-chars":
-                vault_secret = vault.get_jwt_secret()
-                if vault_secret:
-                    self.SECRET_KEY = vault_secret
-                    logger.info("Loaded SECRET_KEY from Vault")
-
-            logger.info("Secrets loaded from Vault")
-        except Exception as e:
-            logger.error(f"Failed to load secrets from Vault: {e}")
-            if not self.SECRET_KEY:
-                raise ValueError("SECRET_KEY not available from Vault or environment")
-
 
 settings = Settings()
-settings.load_secrets_from_vault()
 
 if not settings.SECRET_KEY or len(settings.SECRET_KEY) < 32:
-    if settings.USE_VAULT:
-        pass
-    else:
-        raise ValueError("SECRET_KEY must be at least 32 characters")
+    raise ValueError("SECRET_KEY must be at least 32 characters")

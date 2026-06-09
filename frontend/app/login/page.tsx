@@ -9,6 +9,7 @@ import { API_ENDPOINTS } from "@/app/lib/api";
 import { useRateLimit } from "@/hooks/useRateLimit";
 import { RateLimitToast } from "@/components/auth/RateLimitToast";
 import { RateLimitError } from "@/lib/api/client";
+import { mapErrorToMessage } from "@/lib/utils/errorMapping";
 
 export default function LoginPage() {
   const { login } = useAuthStore();
@@ -18,6 +19,7 @@ export default function LoginPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   
   const { isLimited, remainingSeconds, startLimit } = useRateLimit();
 
@@ -28,6 +30,7 @@ export default function LoginPage() {
     
     setLoading(true);
     setError("");
+    setErrorCode("");
     
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
@@ -109,7 +112,9 @@ export default function LoginPage() {
           window.location.href = "/profile";
         }
       } else {
-        setError(data.detail?.message || "Login failed");
+        const code = data.detail?.code || "INTERNAL_ERROR";
+        setError(mapErrorToMessage(code));
+        setErrorCode(code);
       }
     } catch (err) {
       if (err instanceof RateLimitError) {
@@ -179,8 +184,24 @@ export default function LoginPage() {
           {error && (
             <div className="bg-accent-orange/10 text-accent-orange px-4 py-3 rounded-xl text-sm">
               {error}
+              {errorCode === "EMAIL_NOT_VERIFIED" && (
+                <div className="mt-2">
+                  <Link
+                    href={`/verify-email?email=${encodeURIComponent(formData.email)}`}
+                    className="text-primary-sea font-medium hover:underline"
+                  >
+                    Подтвердить email
+                  </Link>
+                </div>
+              )}
             </div>
           )}
+
+          <div className="text-right">
+            <Link href="/reset-password" className="text-sm text-primary-sea hover:underline">
+              Забыли пароль?
+            </Link>
+          </div>
 
           <button
             type="submit"

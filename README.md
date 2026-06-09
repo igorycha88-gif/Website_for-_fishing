@@ -541,42 +541,11 @@ Closes #123
 - [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment guide
 - [DOCKER.md](DOCKER.md) - Docker guide
 - [MONITORING.md](MONITORING.md) - Monitoring setup
-- [docs/SECRETS.md](docs/SECRETS.md) - Secrets management (HashiCorp Vault)
 - [database/schema.md](database/schema.md) - Database schema
 
 ## Secrets Management
 
-This project uses **HashiCorp Vault** for centralized secrets management.
-
-### Quick Start
-
-```bash
-# Start services with Vault
-docker-compose -f docker-compose.dev.yml up -d
-
-# Vault runs in dev mode on port 8200
-# Root token: dev-root-token
-```
-
-### Environment Variables for Vault
-
-```bash
-# Enable Vault integration
-USE_VAULT=true
-
-# Vault connection
-VAULT_ADDR=http://vault:8200
-
-# Service credentials (from vault-init output)
-AUTH_VAULT_ROLE_ID=<role-id>
-AUTH_VAULT_SECRET_ID=<secret-id>
-```
-
-### Fallback Mode
-
-If Vault is unavailable, services use `.env` variables (set `USE_VAULT=false`).
-
-See [docs/SECRETS.md](docs/SECRETS.md) for complete documentation.
+Secrets are managed via environment variables in `.env` files. See `.env.example` for the full list of required variables. For production, use Docker Secrets or a dedicated secrets management solution.
 
 ## Roadmap
 

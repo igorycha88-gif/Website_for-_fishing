@@ -46,6 +46,20 @@ class GenericErrors:
         )
 
     @staticmethod
+    def email_already_registered(
+        email: str, ip: Optional[str]
+    ) -> HTTPException:
+        return create_generic_error(
+            error_code="EMAIL_ALREADY_REGISTERED",
+            message="This email is already registered and verified. Use password reset if you forgot your password.",
+            log_details={
+                "email": email,
+                "ip_address": ip,
+                "reason": "duplicate_email_verified",
+            },
+        )
+
+    @staticmethod
     def verification_failed(
         email: str, ip: Optional[str], attempts: int
     ) -> HTTPException:
