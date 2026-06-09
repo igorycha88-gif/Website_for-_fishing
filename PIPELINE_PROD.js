@@ -133,6 +133,16 @@ const PREFLIGHT_STAGE = {
         Сохранить в PREVIOUS_STATE.`,
       critical: true,
     },
+    {
+      id: "PF7",
+      name: "Проверка CI статуса",
+      action: `Проверить что последний CI pipeline прошёл:
+        gh run list --workflow=ci.yml --limit=1 --json conclusion
+        Если conclusion != 'success' → вывести ПРЕДУПРЕЖДЕНИЕ.
+        Спросить: «CI не прошёл. Продолжить деплой?» (Да/Нет).
+        См. CI_CD_INTEGRATION.preflight_ci_check.`,
+      critical: false,
+    },
   ],
 };
 
@@ -627,6 +637,69 @@ const ROLLBACK_STAGE = {
       critical: true,
     },
   ],
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// CI/CD ИНТЕГРАЦИЯ (GitHub Actions)
+// ═══════════════════════════════════════════════════════════════════════
+
+const CI_CD_INTEGRATION = {
+  description: `
+    Автоматизированный CI/CD через GitHub Actions.
+    Дополняет, но НЕ заменяет интерактивный деплой через opencode.
+
+    CI/CD используется для:
+    - Автоматической проверки кода при каждом push/PR (ci.yml)
+    - Автоматического деплоя при создании git tag (deploy.yml)
+    - Ручного деплоя через GitHub Actions UI (deploy.yml, workflow_dispatch)
+
+    Интерактивный деплой (через opencode) используется для:
+    - Деплоя с ручными E2E-чеклистами
+    - Деплоя с выбором типа версионирования (вопрос пользователю)
+    - Деплоя с глубоким тестированием на проде (FT5–FT7)`,
+
+  workflows: {
+    ci: {
+      file: ".github/workflows/ci.yml",
+      trigger: "push → main/develop, pull_request → main",
+      jobs: [
+        "backend (matrix: 7 сервисов × ruff + pytest)",
+        "frontend (lint + typecheck + jest)",
+        "docker-build (проверка сборки образов)",
+      ],
+      purpose: "Gate: код не может быть смёржен если CI не прошёл",
+    },
+    deploy: {
+      file: ".github/workflows/deploy.yml",
+      trigger: "workflow_dispatch (ручной), push tag v* (авто)",
+      secrets: [
+        "VPS_HOST — IP или домен VPS",
+        "VPS_USER — SSH пользователь",
+        "VPS_SSH_KEY — приватный SSH ключ",
+        "VPS_APP_DIR — путь к проекту (/opt/fishmap)",
+      ],
+      steps: [
+        "pre-flight — SSH check, disk space, .env.vps, CI status",
+        "backup — pg_dump перед деплоем",
+        "deploy — git pull, build, down, up, healthcheck, verify",
+        "rollback — автоматический при провале deploy",
+        "finalize — cleanup, deployment report",
+      ],
+      purpose: "Автоматизированный деплой по SSH на VPS",
+    },
+  },
+
+  preflight_ci_check: {
+    id: "PF_CI",
+    name: "Проверка CI статуса (GitHub Actions)",
+    action: `При деплое через PIPELINE_PROD.js (интерактивно):
+      Перед началом деплоя — проверить что последний CI run успешный:
+      gh run list --workflow=ci.yml --limit=1 --json conclusion
+      Если conclusion != 'success' → ПРЕДУПРЕЖДЕНИЕ.
+      Если пользователь подтверждает → продолжить.
+      При деплое через deploy.yml — CI проверяется автоматически.`,
+    critical: false,
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════

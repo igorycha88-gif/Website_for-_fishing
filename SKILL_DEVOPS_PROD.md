@@ -616,7 +616,98 @@ docker system df
 
 ---
 
-## 11. Ссылки на связанные файлы
+## 11. CI/CD (GitHub Actions)
+
+### 11.1. Обзор
+
+Продакшн-деплой автоматизирован через GitHub Actions. Два workflow-файла:
+
+| Workflow | Файл | Триггер | Назначение |
+|----------|------|---------|------------|
+| **CI** | `.github/workflows/ci.yml` | push/PR | Проверка кода: lint, test, build |
+| **CD** | `.github/workflows/deploy.yml` | tag v* / manual | Деплой на VPS по SSH |
+
+**CI/CD дополняет, но НЕ заменяет** интерактивный деплой через opencode (PIPELINE_PROD.js).
+
+### 11.2. CI Pipeline (ci.yml)
+
+Запускается автоматически при каждом push в main/develop и при PR.
+
+**Backend (7 сервисов параллельно):**
+- `ruff check` — линтинг
+- `pytest` — тесты (для сервисов без тестов — пропуск)
+
+**Frontend:**
+- `npm run lint` — ESLint
+- `npx tsc --noEmit` — проверка типов
+- `npm test` — Jest
+
+**Docker Build Check:**
+- Сборка образов auth, email, forecast, frontend (без push)
+
+### 11.3. CD Pipeline (deploy.yml)
+
+**Способы запуска:**
+1. Автоматически при push tag `v*` (например, `v0.4.2`)
+2. Вручную через GitHub Actions UI (workflow_dispatch, ввести `DEPLOY` для подтверждения)
+
+**Шаги деплоя (следование PIPELINE_PROD.js):**
+
+```
+pre-flight → backup → deploy → [rollback при ошибке] → finalize
+```
+
+### 11.4. Настройка GitHub Secrets
+
+Перед использованием CD pipeline нужно настроить секреты в GitHub:
+
+**Repository → Settings → Secrets and variables → Actions**
+
+| Secret | Описание | Пример |
+|--------|----------|--------|
+| `VPS_HOST` | IP-адрес или домен VPS | `5.35.102.219` |
+| `VPS_USER` | SSH-пользователь | `root` |
+| `VPS_SSH_KEY` | Приватный SSH-ключ | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
+| `VPS_APP_DIR` | Путь к проекту на VPS | `/opt/fishmap` |
+
+**Генерация SSH-ключа для деплоя:**
+
+```bash
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_deploy
+ssh-copy-id -i ~/.ssh/github_deploy.pub root@YOUR_VPS_IP
+cat ~/.ssh/github_deploy  # → вставить в GitHub Secret VPS_SSH_KEY
+```
+
+### 11.5. Запуск деплоя через GitHub Actions
+
+**Вариант 1: Автоматический (по tag)**
+
+```bash
+git tag -a "v0.4.2" -m "Release v0.4.2"
+git push origin v0.4.2
+# → deploy.yml запустится автоматически
+```
+
+**Вариант 2: Ручной (GitHub UI)**
+
+1. Открыть **Actions** → **Deploy to Production**
+2. Нажать **Run workflow**
+3. Ввести `DEPLOY` для подтверждения
+4. Нажать **Run workflow**
+
+### 11.6. Интеграция с PIPELINE_PROD.js
+
+При интерактивном деплое через opencode (PIPELINE_PROD.js):
+- Pre-flight включает проверку CI статуса (шаг PF7)
+- Если CI не прошёл → предупреждение, запрос подтверждения
+
+При деплое через deploy.yml:
+- CI проверяется автоматически на шаге pre-flight
+- Деплой не начнётся если CI провалился
+
+---
+
+## 12. Ссылки на связанные файлы
 
 | Файл | Описание |
 |------|----------|
@@ -632,6 +723,8 @@ docker system df
 | `DEPLOYMENT.md` | Общая документация по деплою |
 | `ARCHITECTURE.md` | Архитектура платформы |
 | `AGENTS.md` | Правила конвейера AI-команды |
+| `.github/workflows/ci.yml` | CI pipeline (lint, test, build check) |
+| `.github/workflows/deploy.yml` | CD pipeline (SSH-деплой на VPS) |
 
 ---
 
