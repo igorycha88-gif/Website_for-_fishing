@@ -22,6 +22,7 @@ import { ru } from "date-fns/locale";
 import { useForecast } from "@/hooks/useForecast";
 import { useAuthStore } from "@/app/stores/useAuthStore";
 import CalendarPopover from "@/components/CalendarPopover";
+import MoonPhaseIcon from "@/components/ui/MoonPhaseIcon";
 import {
   Region,
   ForecastResponse,
@@ -591,11 +592,11 @@ export default function FishingForecast({
                   </div>
                 </div>
 
-                <div 
+                <div
                   className="flex items-center gap-2 bg-white/70 rounded-lg px-3 py-2 cursor-help"
                   title={getMoonPhaseTooltip(forecast.weather.moon_phase, forecast.weather.moon_illumination)}
                 >
-                  <span className="text-lg">{getMoonPhaseLabel(forecast.weather.moon_phase, forecast.weather.moon_phase_name).split(" ").pop() || "🌙"}</span>
+                  <MoonPhaseIcon phase={forecast.weather.moon_phase} size={28} />
                   <div>
                     <div className="text-xs text-gray-500">Луна</div>
                     <div className="font-semibold text-gray-800 text-xs">

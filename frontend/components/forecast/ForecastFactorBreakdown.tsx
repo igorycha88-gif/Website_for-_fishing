@@ -6,7 +6,6 @@ import {
   Thermometer,
   Gauge,
   Wind,
-  Moon,
   CloudRain,
   Sun,
   Waves,
@@ -15,6 +14,7 @@ import {
   Sparkles,
   ChevronDown,
 } from "lucide-react";
+import MoonPhaseIcon from "@/components/ui/MoonPhaseIcon";
 import {
   TimeOfDayForecast,
   WeatherSummary,
@@ -123,7 +123,7 @@ function buildFactors(
   factors.push({
     key: "moon",
     name: "Луна",
-    icon: <Moon className="w-4 h-4 text-indigo-500" />,
+    icon: <MoonPhaseIcon phase={weather?.moon_phase ?? null} size={16} />,
     score: tod.moon_score,
     currentValue: moonPhase || (weather?.moon_phase !== null && weather?.moon_phase !== undefined
       ? `${Math.round((weather.moon_phase || 0) * 100)}%`
