@@ -150,10 +150,36 @@ class NewEntityCreate(BaseModel):
 
 ```mermaid
 graph TD
-    A[Next.js Frontend] --> B[FastAPI Service]
-    B --> C[PostgreSQL]
-    B --> D[Redis Cache]
-    B --> E[External API]
+    subgraph Frontend
+        FE[Next.js 15 Frontend :3000]
+    end
+    subgraph Backend
+        AUTH[Auth Service :8001]
+        PLACES[Places Service :8002]
+        REPORTS[Reports Service :8003]
+        BOOKING[Booking Service :8004]
+        SHOP[Shop Service :8005]
+        EMAIL[Email Service :8006]
+        FORECAST[Forecast Service :8007]
+    end
+    subgraph Data
+        PG[(PostgreSQL 16 :5432)]
+        REDIS[(Redis 7 :6379)]
+    end
+
+    FE --> AUTH
+    FE --> PLACES
+    FE --> FORECAST
+    FE --> EMAIL
+    AUTH --> PG
+    AUTH --> REDIS
+    AUTH --> EMAIL
+    PLACES --> PG
+    PLACES --> REDIS
+    FORECAST --> PG
+    FORECAST --> REDIS
+    EMAIL --> PG
+    EMAIL --> REDIS
 ```
 
 ---
