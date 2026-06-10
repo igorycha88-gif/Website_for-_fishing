@@ -201,9 +201,9 @@ jobs:
               ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             cd ${{ secrets.VPS_APP_DIR }}
 
-            echo 'Waiting for all services to become healthy (max 180s)...'
+            echo 'Waiting for all services to become healthy (max 300s)...'
             ELAPSED=0
-            while [ \$ELAPSED -lt 180 ]; do
+            while [ \$ELAPSED -lt 300 ]; do
               STATUS=\$(docker compose -f docker-compose.vps-host.yml ps --format json 2>/dev/null || echo '{}')
 
               UNHEALTHY=\$(echo \"\$STATUS\" | python3 -c \"
