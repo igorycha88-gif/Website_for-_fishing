@@ -216,7 +216,7 @@ jobs:
               check_url 'http://127.0.0.1:8006/health' && UP=\$((UP + 1)) || true
 
               REQUIRED=\$((REQUIRED + 1))
-              check_url 'http://127.0.0.1:3080' && UP=\$((UP + 1)) || true
+              check_url 'http://127.0.0.1:3000' && UP=\$((UP + 1)) || true
 
               FORECAST_UP=false
               check_url 'http://127.0.0.1:8007/health' && FORECAST_UP=true || true
@@ -270,7 +270,7 @@ jobs:
             check 'Auth'      'http://127.0.0.1:8001/health'
             check 'Email'     'http://127.0.0.1:8006/health'
             check 'Forecast'  'http://127.0.0.1:8007/health'
-            check 'Frontend'  'http://127.0.0.1:3080/api/health'
+            check 'Frontend'  'http://127.0.0.1:3000'
 
             echo ''
             echo '=== Redis ==='
