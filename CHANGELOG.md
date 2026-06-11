@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.5] - 2026-06-11
+
+### Исправлено
+- fix(forecast): автоматическая миграция недостающих колонок при старте (climate_zone, v5 fields)
+- fix(forecast): логирование наличия колонок regions.climate_zone и fish_bite_settings.pre_spawn_days
+
 ## [1.2.4] - 2026-06-11
 
 ### Исправлено
