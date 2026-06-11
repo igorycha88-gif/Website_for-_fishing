@@ -118,6 +118,32 @@ services:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health')"]
       <<: *healthcheck
 
+  places-service:
+    build:
+      context: ./services/places-service
+      dockerfile: Dockerfile
+    mem_limit: 200m
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fishing_db}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env.vps}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SERVICE_NAME: places-service
+    networks:
+      - fishing-network
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      <<: *healthcheck
+
   forecast-service:
     build:
       context: ./services/forecast-service
@@ -138,6 +164,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      places-service:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       <<: *healthcheck
@@ -156,7 +184,7 @@ services:
     environment:
       DOCKER_ENV: "true"
       AUTH_SERVICE_URL: http://auth-service:8000
-      PLACES_SERVICE_URL: http://auth-service:8000
+      PLACES_SERVICE_URL: http://places-service:8001
       REPORTS_SERVICE_URL: http://auth-service:8000
       BOOKING_SERVICE_URL: http://auth-service:8000
       SHOP_SERVICE_URL: http://auth-service:8000
@@ -169,6 +197,7 @@ services:
     depends_on:
       - auth-service
       - email-service
+      - places-service
       - forecast-service
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"]
