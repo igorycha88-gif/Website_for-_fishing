@@ -1,35 +1,12 @@
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import text, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from uuid import uuid4
 
-from app.core.config import settings
 from app.models.fish_type import FishType
 from app.models.equipment_type import EquipmentType
 from app.models.favorite_place import FavoritePlace
 from app.models.place import Place
-from app.core.database import Base
-
-
-@pytest.fixture
-async def db():
-    engine = create_async_engine(settings.DATABASE_URL, echo=False)
-    testing_async_session = sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
-    async with testing_async_session() as session:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-
-        # Clean ONLY places service related data - DO NOT CLEAN users!
-        await session.execute(text("DELETE FROM favorite_places"))
-        await session.execute(text("DELETE FROM fish_types"))
-        await session.execute(text("DELETE FROM equipment_types"))
-        await session.execute(text("DELETE FROM places"))
-        await session.commit()
-
-        yield session
 
 
 @pytest.mark.asyncio
