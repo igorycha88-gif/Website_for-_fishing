@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str
-    REDIS_URL: str
-    SECRET_KEY: str
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/fishing_db"
+    REDIS_URL: str = "redis://localhost:6379/0"
+    SECRET_KEY: str = "dev-secret-key-change-in-production-please-32ch"
     ALGORITHM: str = "HS256"
     LOG_LEVEL: str = "INFO"
     LOGSTASH_URL: str = "http://logstash:5000"
