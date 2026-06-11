@@ -279,20 +279,46 @@ async def get_forecast(
     region = result.scalar_one_or_none()
 
     if not region:
+        logger.warning(
+            "Region not found",
+            service="forecast-service",
+            region_id=str(region_id),
+            action="get_forecast",
+        )
         raise HTTPException(status_code=404, detail="Region not found")
 
     climate_zone = get_climate_zone(region.code)
+    logger.info(
+        "Region resolved",
+        service="forecast-service",
+        action="get_forecast",
+        region_id=str(region_id),
+        region_name=region.name,
+        region_code=region.code,
+        climate_zone=climate_zone,
+        forecast_date=str(forecast_date),
+    )
 
     cached = await _get_cached_forecast(redis, region_id, forecast_date)
     if cached:
         logger.info(
             "Forecast cache hit",
             service="forecast-service",
+            action="get_forecast",
             region_id=str(region_id),
             forecast_date=str(forecast_date),
+            cached_fish_count=len(cached.get("forecasts", [])),
         )
         cached["region"] = RegionResponse.model_validate(region)
         return ForecastResponse(**cached)
+
+    logger.info(
+        "Forecast cache miss",
+        service="forecast-service",
+        action="get_forecast",
+        region_id=str(region_id),
+        forecast_date=str(forecast_date),
+    )
 
     weather_result = await db.execute(
         select(WeatherData)
@@ -304,7 +330,23 @@ async def get_forecast(
     )
     weather_records = weather_result.scalars().all()
 
+    logger.info(
+        "Weather data loaded",
+        service="forecast-service",
+        action="get_forecast",
+        region_id=str(region_id),
+        forecast_date=str(forecast_date),
+        weather_records_count=len(weather_records),
+    )
+
     if not weather_records:
+        logger.error(
+            "No weather data available for date",
+            service="forecast-service",
+            action="get_forecast",
+            region_id=str(region_id),
+            forecast_date=str(forecast_date),
+        )
         raise HTTPException(
             status_code=404,
             detail=f"No weather data available for {forecast_date}",
@@ -356,8 +398,25 @@ async def get_forecast(
     settings_result = await db.execute(settings_query)
     fish_settings_list = settings_result.scalars().all()
 
+    logger.info(
+        "Fish bite settings loaded",
+        service="forecast-service",
+        action="get_forecast",
+        region_id=str(region_id),
+        fish_settings_count=len(fish_settings_list),
+        filtered_by_fish_type_id=str(fish_type_id) if fish_type_id else None,
+    )
+
     fish_types_result = await db.execute(select(FishType))
     fish_types_map = {ft.id: ft for ft in fish_types_result.scalars().all()}
+
+    logger.info(
+        "Fish types loaded",
+        service="forecast-service",
+        action="get_forecast",
+        fish_types_count=len(fish_types_map),
+        fish_type_names=list(fish_types_map.values())[:5] if fish_types_map else [],
+    )
 
     month = forecast_date.month
     season = get_season(month)
@@ -379,8 +438,35 @@ async def get_forecast(
 
     fish_forecasts = []
 
+    filtered_out_by_region = 0
+    no_fish_type_in_map = 0
+
     for fish_settings in fish_settings_list:
+        fish_type_obj_loop = fish_types_map.get(fish_settings.fish_type_id)
+        fish_name_log = fish_type_obj_loop.name if fish_type_obj_loop else f"unknown_{fish_settings.fish_type_id}"
+
         if fish_settings.region_ids and region_id not in fish_settings.region_ids:
+            filtered_out_by_region += 1
+            logger.debug(
+                "Fish filtered out by region_ids",
+                service="forecast-service",
+                action="get_forecast",
+                fish_name=fish_name_log,
+                fish_type_id=str(fish_settings.fish_type_id),
+                region_id=str(region_id),
+                fish_region_ids=[str(rid) for rid in fish_settings.region_ids],
+            )
+            continue
+
+        if not fish_type_obj_loop:
+            no_fish_type_in_map += 1
+            logger.warning(
+                "Fish type not found in fish_types_map",
+                service="forecast-service",
+                action="get_forecast",
+                fish_type_id=str(fish_settings.fish_type_id),
+                fish_settings_id=str(fish_settings.id),
+            )
             continue
 
         fish_result = await db.execute(
@@ -550,6 +636,20 @@ async def get_forecast(
 
     fish_forecasts.sort(
         key=lambda x: sum(f.bite_score for f in x.forecasts), reverse=True
+    )
+
+    logger.info(
+        "Fish forecast summary",
+        service="forecast-service",
+        action="get_forecast",
+        region_id=str(region_id),
+        forecast_date=str(forecast_date),
+        total_fish_settings=len(fish_settings_list),
+        filtered_out_by_region=filtered_out_by_region,
+        no_fish_type_in_map=no_fish_type_in_map,
+        final_fish_forecasts=len(fish_forecasts),
+        fish_names=[ff.fish_type.name for ff in fish_forecasts[:10]],
+        weather_records_count=len(weather_records),
     )
 
     typical_fish_ids = set()
@@ -767,6 +867,16 @@ async def get_forecast(
         region_id,
         forecast_date,
         response.model_dump(mode="json"),
+    )
+
+    logger.info(
+        "Forecast response ready",
+        service="forecast-service",
+        action="get_forecast",
+        region_id=str(region_id),
+        forecast_date=str(forecast_date),
+        fish_count=len(fish_forecasts[:10]),
+        returned_fish_names=[ff.fish_type.name for ff in fish_forecasts[:10]],
     )
 
     return response
