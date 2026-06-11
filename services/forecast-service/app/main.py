@@ -19,6 +19,54 @@ async def lifespan(app: FastAPI):
 
     async for db in get_db():
         try:
+            from sqlalchemy import text
+            result = await db.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'regions' AND column_name = 'climate_zone'"
+            ))
+            has_climate = result.fetchone() is not None
+            logger.info(f"DB check: regions.climate_zone exists = {has_climate}", service="forecast-service")
+
+            result = await db.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'fish_bite_settings' AND column_name = 'pre_spawn_days'"
+            ))
+            has_v5 = result.fetchone() is not None
+            logger.info(f"DB check: fish_bite_settings.pre_spawn_days exists = {has_v5}", service="forecast-service")
+
+            if not has_climate:
+                logger.info("Adding missing climate_zone column", service="forecast-service")
+                await db.execute(text(
+                    "ALTER TABLE regions ADD COLUMN IF NOT EXISTS climate_zone VARCHAR(10) DEFAULT 'central'"
+                ))
+                await db.commit()
+                logger.info("climate_zone column added", service="forecast-service")
+
+            if not has_v5:
+                logger.info("Adding missing v5 columns", service="forecast-service")
+                await db.execute(text(
+                    "ALTER TABLE fish_bite_settings ADD COLUMN IF NOT EXISTS pre_spawn_days INTEGER DEFAULT 14, "
+                    "ADD COLUMN IF NOT EXISTS post_spawn_days INTEGER DEFAULT 5, "
+                    "ADD COLUMN IF NOT EXISTS moon_phase_preference VARCHAR(20) DEFAULT 'neutral' "
+                    "CHECK (moon_phase_preference IN ('new_moon', 'full_moon', 'both', 'neutral')), "
+                    "ADD COLUMN IF NOT EXISTS turbidity_sensitive BOOLEAN DEFAULT false, "
+                    "ADD COLUMN IF NOT EXISTS uv_sensitivity NUMERIC(3, 2) DEFAULT 0.3, "
+                    "ADD COLUMN IF NOT EXISTS water_level_sensitivity NUMERIC(3, 2) DEFAULT 0.3"
+                ))
+                await db.execute(text(
+                    "ALTER TABLE weather_data ADD COLUMN IF NOT EXISTS water_temperature NUMERIC(5, 2)"
+                ))
+                await db.commit()
+                logger.info("v5 columns added", service="forecast-service")
+        except Exception as e:
+            logger.error(
+                f"DB migration check failed: {e}",
+                service="forecast-service",
+                error=str(e),
+                exc_info=True,
+            )
+
+        try:
             await seed_all()
         except Exception as e:
             logger.error(
