@@ -198,38 +198,46 @@ jobs:
               ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             cd ${{ secrets.VPS_APP_DIR }}
 
-            echo 'Waiting for all services to become healthy (max 300s)...'
+            echo 'Waiting for services to start (max 300s)...'
             ELAPSED=0
+
+            check_url() {
+              curl -sf -o /dev/null \"\$1\" 2>/dev/null
+            }
+
             while [ \$ELAPSED -lt 300 ]; do
-              STATUS=\$(docker compose -f docker-compose.vps-host.yml ps --format json 2>/dev/null || echo '{}')
+              UP=0
+              TOTAL=0
 
-              UNHEALTHY=\$(echo \"\$STATUS\" | python3 -c \"
-          import sys, json
-          unhealthy = []
-          for line in sys.stdin:
-              try:
-                  d = json.loads(line.strip())
-                  h = d.get('Health', d.get('Status', 'unknown'))
-                  svc = d.get('Service', d.get('Name', '?'))
-                  if h not in ('healthy',):
-                      unhealthy.append(f'{svc}={h}')
-              except: pass
-          print(', '.join(unhealthy))
-          \" 2>/dev/null || echo 'checking...')
+              TOTAL=\$((TOTAL + 1))
+              check_url 'http://127.0.0.1:8001/health' && UP=\$((UP + 1)) || true
 
-              if [ -z \"\$UNHEALTHY\" ] || [ \"\$UNHEALTHY\" = '' ]; then
-                echo \"All services healthy at \${ELAPSED}s!\"
-                docker compose -f docker-compose.vps-host.yml ps --format 'table {{.Name}}\t{{.Status}}'
+              TOTAL=\$((TOTAL + 1))
+              check_url 'http://127.0.0.1:8006/health' && UP=\$((UP + 1)) || true
+
+              TOTAL=\$((TOTAL + 1))
+              check_url 'http://127.0.0.1:8007/health' && UP=\$((UP + 1)) || true
+
+              TOTAL=\$((TOTAL + 1))
+              check_url 'http://127.0.0.1:3080' && UP=\$((UP + 1)) || true
+
+              TOTAL=\$((TOTAL + 1))
+              docker exec \$(docker ps -q -f name=redis | head -1) redis-cli -h 127.0.0.1 ping > /dev/null 2>&1 && UP=\$((UP + 1)) || true
+
+              if [ \"\$UP\" -ge \"\$TOTAL\" ]; then
+                echo \"All \$UP/\$TOTAL services healthy at \${ELAPSED}s!\"
+                docker compose -f docker-compose.vps-host.yml ps
                 exit 0
               fi
 
-              echo \"  \${ELAPSED}s: waiting... (\${UNHEALTHY})\"
+              echo \"  \${ELAPSED}s: \$UP/\$TOTAL services up (forecast may take up to 5 min)...\"
               sleep 10
               ELAPSED=\$((ELAPSED + 10))
             done
 
-            echo 'ERROR: Timeout waiting for healthy services'
+            echo 'ERROR: Timeout waiting for services'
             docker compose -f docker-compose.vps-host.yml ps
+            docker compose -f docker-compose.vps-host.yml logs --tail=30
             exit 1
           "
 
