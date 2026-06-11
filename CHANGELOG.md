@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.4] - 2026-06-11
+
+### Исправлено
+- fix(prod): добавлен отсутствующий places-service в docker-compose.vps-host.yml (порт 8008)
+- fix(prod): исправлен PLACES_SERVICE_URL — указывал на auth-service (8001) вместо places (8008)
+- fix(prod): исправлены REPORTS/BOOKING/SHOP service URLs на корректные порты
+- fix(forecast): seed_all() обёрнут в try/except — сервис не падает при ошибке сидирования
+
 ## [1.2.3] - 2026-06-11
 
 ### Добавлено
