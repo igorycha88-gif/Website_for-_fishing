@@ -135,7 +135,7 @@ async def test_confirm_password_reset_invalid_code(mock_db, mock_request):
 
         request_body = ResetPasswordConfirm(
             email="test@example.com",
-            code="WRONG",
+            code="WRONG1",
             new_password="NewPassword123",
         )
 
@@ -187,7 +187,7 @@ async def test_confirm_password_reset_max_attempts(mock_db, mock_request):
 
         request_body = ResetPasswordConfirm(
             email="test@example.com",
-            code="WRONG",
+            code="WRONG1",
             new_password="NewPassword123",
         )
 

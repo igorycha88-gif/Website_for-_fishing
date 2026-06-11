@@ -204,7 +204,7 @@ class TestWeatherCollectorService:
         result = await service._save_weather_data(region_id, mock_forecast_response)
 
         assert result == 2
-        assert mock_db.add.call_count == 2
+        assert mock_db.execute.call_count == 4  # 2 deletes + 2 upserts
         mock_db.commit.assert_called_once()
 
     @pytest.mark.asyncio

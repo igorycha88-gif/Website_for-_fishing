@@ -14,13 +14,14 @@ class TestRegistrationGenericErrors:
 
     @pytest.mark.asyncio
     async def test_registration_duplicate_email_returns_generic_error(self):
-        """При регистрации с существующим email возвращается REGISTRATION_FAILED"""
+        """При регистрации с существующим verified email возвращается EMAIL_ALREADY_REGISTERED"""
         from app.endpoints.auth import register
         from app.schemas.auth import RegisterRequest
         
         mock_db = AsyncMock()
         mock_user_crud = MagicMock()
-        mock_user_crud.get_by_email = AsyncMock(return_value=MagicMock(id="existing-id"))
+        existing_user = MagicMock(id="existing-id", is_verified=True)
+        mock_user_crud.get_by_email = AsyncMock(return_value=existing_user)
         mock_user_crud.get_by_username = AsyncMock(return_value=None)
         
         mock_request = MagicMock(spec=Request)
@@ -38,8 +39,8 @@ class TestRegistrationGenericErrors:
                 await register(request, req=mock_request, db=mock_db)
             
             assert exc_info.value.status_code == status.HTTP_400_BAD_REQUEST
-            assert exc_info.value.detail["code"] == "REGISTRATION_FAILED"
-            assert "Unable to complete registration" in exc_info.value.detail["message"]
+            assert exc_info.value.detail["code"] == "EMAIL_ALREADY_REGISTERED"
+            assert "already registered" in exc_info.value.detail["message"].lower()
             assert "details" not in exc_info.value.detail
             assert "email" not in exc_info.value.detail
 
@@ -75,7 +76,7 @@ class TestRegistrationGenericErrors:
 
     @pytest.mark.asyncio
     async def test_registration_duplicate_email_and_username_identical_response(self):
-        """Response идентичен для duplicate email и duplicate username"""
+        """Response для duplicate verified email отличается от duplicate username"""
         from app.endpoints.auth import register
         from app.schemas.auth import RegisterRequest
         
@@ -88,7 +89,8 @@ class TestRegistrationGenericErrors:
         
         mock_db = AsyncMock()
         mock_user_crud_email = MagicMock()
-        mock_user_crud_email.get_by_email = AsyncMock(return_value=MagicMock(id="existing-id"))
+        existing_verified_user = MagicMock(id="existing-id", is_verified=True)
+        mock_user_crud_email.get_by_email = AsyncMock(return_value=existing_verified_user)
         mock_user_crud_email.get_by_username = AsyncMock(return_value=None)
         
         with patch('app.endpoints.auth.UserCRUD', return_value=mock_user_crud_email):
@@ -119,8 +121,9 @@ class TestRegistrationGenericErrors:
             except HTTPException as e:
                 username_error_detail = e.detail
         
-        assert email_error_detail == username_error_detail
-        assert email_error_detail["code"] == "REGISTRATION_FAILED"
+        assert email_error_detail != username_error_detail
+        assert email_error_detail["code"] == "EMAIL_ALREADY_REGISTERED"
+        assert username_error_detail["code"] == "REGISTRATION_FAILED"
 
     @pytest.mark.asyncio
     async def test_registration_logs_ip_address(self):

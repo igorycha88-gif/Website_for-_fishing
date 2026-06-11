@@ -35,6 +35,14 @@ class PlaceBase(BaseModel):
         default_factory=list, max_length=4, description="URL фото (максимум 4)"
     )
 
+    @field_validator("water_type")
+    @classmethod
+    def validate_water_type(cls, v):
+        valid_types = ["river", "lake", "sea"]
+        if v not in valid_types:
+            raise ValueError(f"water_type must be one of {valid_types}")
+        return v
+
 
 class PlaceBaseForResponse(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, description="Название места")
