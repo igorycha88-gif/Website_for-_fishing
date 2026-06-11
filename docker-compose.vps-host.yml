@@ -126,6 +126,35 @@ services:
       start_period: 15s
     command: ["uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8006"]
 
+  places-service:
+    build:
+      context: ./services/places-service
+      dockerfile: Dockerfile
+      network: host
+    network_mode: host
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@127.0.0.1:5432/${POSTGRES_DB:-fishing_db}
+      REDIS_URL: redis://127.0.0.1:6379/0
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      YANDEX_MAPS_API_KEY: ${YANDEX_MAPS_API_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SERVICE_NAME: places-service
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    command: ["uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8008"]
+
   forecast-service:
     build:
       context: ./services/forecast-service
@@ -145,6 +174,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      places-service:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8007/health')"]
       interval: 30s
@@ -166,16 +197,17 @@ services:
     environment:
       DOCKER_ENV: "false"
       AUTH_SERVICE_URL: http://127.0.0.1:8001
-      PLACES_SERVICE_URL: http://127.0.0.1:8001
-      REPORTS_SERVICE_URL: http://127.0.0.1:8001
-      BOOKING_SERVICE_URL: http://127.0.0.1:8001
-      SHOP_SERVICE_URL: http://127.0.0.1:8001
+      PLACES_SERVICE_URL: http://127.0.0.1:8008
+      REPORTS_SERVICE_URL: http://127.0.0.1:8003
+      BOOKING_SERVICE_URL: http://127.0.0.1:8004
+      SHOP_SERVICE_URL: http://127.0.0.1:8005
       EMAIL_SERVICE_URL: http://127.0.0.1:8006
       FORECAST_SERVICE_URL: http://127.0.0.1:8007
     restart: unless-stopped
     logging: *logging
     depends_on:
       - auth-service
+      - places-service
       - email-service
       - forecast-service
     healthcheck:

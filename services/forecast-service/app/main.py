@@ -18,7 +18,15 @@ async def lifespan(app: FastAPI):
     logger.info("Starting forecast-service", service="forecast-service")
 
     async for db in get_db():
-        await seed_all()
+        try:
+            await seed_all()
+        except Exception as e:
+            logger.error(
+                f"Seed failed (service will continue): {e}",
+                service="forecast-service",
+                error=str(e),
+                exc_info=True,
+            )
         break
 
     start_scheduler()
