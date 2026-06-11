@@ -1,12 +1,10 @@
 import json
 from typing import Optional, Dict, Any
-from decimal import Decimal
-from datetime import date, time, datetime, timezone
+from datetime import datetime, timezone
 
 import httpx
 from redis.asyncio import Redis
 
-from app.core.config import settings
 from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)

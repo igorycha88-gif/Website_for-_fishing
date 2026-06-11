@@ -11,7 +11,6 @@ class TestEmailServiceIntegration:
     @pytest.mark.asyncio
     async def test_auth_service_config_has_api_key_field(self):
         from pydantic_settings import BaseSettings
-        from typing import Optional, List
 
         class TestSettings(BaseSettings):
             DATABASE_URL: str = "test"

@@ -44,7 +44,7 @@ async def get_current_weather(
     weather_service: WeatherService = Depends(get_weather_service),
 ):
     result = await db.execute(
-        select(Region).where(Region.id == region_id, Region.is_active == True)
+        select(Region).where(Region.id == region_id, Region.is_active)
     )
     region = result.scalar_one_or_none()
 
@@ -94,7 +94,7 @@ async def get_current_weather_by_coords(
     weather_service: WeatherService = Depends(get_weather_service),
 ):
     logger.info(
-        f"Fetching weather by coordinates", service="forecast-service", lat=lat, lon=lon
+        "Fetching weather by coordinates", service="forecast-service", lat=lat, lon=lon
     )
 
     weather_data = await weather_service.get_current_weather(lat=lat, lon=lon)
@@ -169,7 +169,7 @@ async def collect_weather_data(
     if request.region_codes and len(request.region_codes) > 0:
         result = await db.execute(
             select(Region).where(
-                Region.code.in_(request.region_codes), Region.is_active == True
+                Region.code.in_(request.region_codes), Region.is_active
             )
         )
         regions = result.scalars().all()

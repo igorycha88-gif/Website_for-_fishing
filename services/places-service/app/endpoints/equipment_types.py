@@ -7,8 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db, get_redis
 from app.core.logging_config import get_logger
 from app.schemas.equipment_type import (
-    EquipmentTypeCreate,
-    EquipmentTypeUpdate,
     EquipmentTypeResponse,
 )
 from app.crud import crud_equipment_type

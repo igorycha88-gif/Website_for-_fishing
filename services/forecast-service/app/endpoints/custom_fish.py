@@ -1,10 +1,9 @@
 from typing import List
 from uuid import UUID
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete, func
+from sqlalchemy import select, func
 
 from app.core.database import get_db
 from app.core.logging_config import get_logger
@@ -57,7 +56,7 @@ async def get_custom_fish(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     result = await db.execute(
-        select(Region).where(Region.id == region_id, Region.is_active == True)
+        select(Region).where(Region.id == region_id, Region.is_active)
     )
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Region not found")
@@ -112,14 +111,14 @@ async def add_custom_fish(
         raise HTTPException(status_code=401, detail="Authentication required")
 
     result = await db.execute(
-        select(Region).where(Region.id == region_id, Region.is_active == True)
+        select(Region).where(Region.id == region_id, Region.is_active)
     )
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Region not found")
 
     result = await db.execute(
         select(FishType).where(
-            FishType.id == data.fish_type_id, FishType.is_active == True
+            FishType.id == data.fish_type_id, FishType.is_active
         )
     )
     fish_type = result.scalar_one_or_none()
@@ -161,7 +160,7 @@ async def add_custom_fish(
     await db.commit()
 
     logger.info(
-        f"Added custom fish for user",
+        "Added custom fish for user",
         service="forecast-service",
         user_id=str(user_id),
         fish_type_id=str(data.fish_type_id),
@@ -207,7 +206,7 @@ async def remove_custom_fish(
     await db.commit()
 
     logger.info(
-        f"Removed custom fish for user",
+        "Removed custom fish for user",
         service="forecast-service",
         user_id=str(user_id),
         fish_type_id=str(fish_type_id),
@@ -224,26 +223,25 @@ async def get_all_fish_types(
     user_id: UUID | None = Depends(get_current_user_id),
 ):
     result = await db.execute(
-        select(Region).where(Region.id == region_id, Region.is_active == True)
+        select(Region).where(Region.id == region_id, Region.is_active)
     )
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Region not found")
 
     result = await db.execute(
-        select(FishType).where(FishType.is_active == True).order_by(FishType.name)
+        select(FishType).where(FishType.is_active).order_by(FishType.name)
     )
     all_fish_types = result.scalars().all()
 
     typical_fish_ids = await _get_typical_fish_ids(db, region_id)
 
-    custom_fish_ids = set()
     if user_id:
         result = await db.execute(
             select(UserAddedFish.fish_type_id).where(
                 UserAddedFish.user_id == user_id, UserAddedFish.region_id == region_id
             )
         )
-        custom_fish_ids = {row[0] for row in result.fetchall()}
+        {row[0] for row in result.fetchall()}
 
     response_fish = []
     for ft in all_fish_types:

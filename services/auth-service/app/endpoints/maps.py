@@ -1,11 +1,9 @@
-import logging
 from fastapi import APIRouter, Query, Depends, HTTPException, status
 from redis.asyncio import Redis
 from app.core.database import get_redis
 from app.services.geocode import GeocodeService
 from app.core.logging_config import get_logger
 from app.core.config import settings
-from typing import Optional
 
 logger = get_logger(__name__)
 

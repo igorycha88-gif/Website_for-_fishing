@@ -1898,7 +1898,7 @@ class TestBiteScoreV5:
             wind_speed=Decimal("3"),
             moon_phase=Decimal("0.0"),
         )
-        result_normal = calculate_bite_score(
+        calculate_bite_score(
             weather, fish_settings, hour=8, month=6, check_date=date(2025, 6, 15)
         )
         result_pre_spawn = calculate_bite_score(

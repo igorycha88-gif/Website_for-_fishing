@@ -1,8 +1,6 @@
 import aiosmtplib
 import secrets
-import logging
 from email.message import EmailMessage
-from typing import Optional
 from tenacity import retry, stop_after_attempt, wait_exponential
 from app.core.config import Settings
 from app.core.logging_config import get_logger

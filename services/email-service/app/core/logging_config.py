@@ -1,6 +1,4 @@
 import structlog
-import logging
-import sys
 from app.core.config import settings
 
 

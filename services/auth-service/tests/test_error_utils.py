@@ -1,7 +1,6 @@
 import pytest
-import asyncio
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 import sys
 import os
 
@@ -78,7 +77,7 @@ class TestGenericErrors:
 
     def test_registration_failed_with_duplicate_username(self):
         with patch("app.core.error_utils.logger") as mock_logger:
-            error = GenericErrors.registration_failed(
+            GenericErrors.registration_failed(
                 email="test@example.com",
                 username="existinguser",
                 ip="10.0.0.1",
@@ -114,7 +113,7 @@ class TestGenericErrors:
 
     def test_verification_failed_with_logging(self):
         with patch("app.core.error_utils.logger") as mock_logger:
-            error = GenericErrors.verification_failed(
+            GenericErrors.verification_failed(
                 email="test@example.com",
                 ip="192.168.1.1",
                 attempts=2

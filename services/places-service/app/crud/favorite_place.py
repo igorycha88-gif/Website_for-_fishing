@@ -5,7 +5,6 @@ from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 
 from app.models.favorite_place import FavoritePlace
-from app.models.place import Place
 from app.core.config import settings
 from app.core.logging_config import get_logger
 

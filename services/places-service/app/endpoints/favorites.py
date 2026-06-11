@@ -1,4 +1,3 @@
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -6,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db, get_redis
 from app.core.logging_config import get_logger
-from app.schemas.place import PlaceResponse, PlaceListResponse
+from app.schemas.place import PlaceListResponse
 from app.crud import crud_favorite_place, crud_place
 from app.endpoints.places import get_current_user_id
 

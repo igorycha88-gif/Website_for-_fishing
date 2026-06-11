@@ -3,7 +3,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.core.database import get_db, database
+from app.core.database import get_db
 from app.models.fish_type import FishType
 from app.models.equipment_type import EquipmentType
 from app.core.logging_config import get_logger
@@ -138,7 +138,6 @@ async def seed_public_places(db: AsyncSession):
 
     from app.models.place import Place
     from app.models.fish_type import FishType
-    from uuid import uuid4
 
     test_places_data = [
         {

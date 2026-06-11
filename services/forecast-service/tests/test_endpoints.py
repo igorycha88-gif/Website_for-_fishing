@@ -53,7 +53,7 @@ class TestRegionsEndpoint:
         mock_scalars.all.return_value = [sample_region]
         mock_result.scalars.return_value = mock_scalars
 
-        with patch("app.endpoints.regions.select") as mock_select:
+        with patch("app.endpoints.regions.select"):
             mock_db.execute.return_value = mock_result
 
             result = await get_regions(is_active=True, db=mock_db)
@@ -65,12 +65,11 @@ class TestRegionsEndpoint:
     @pytest.mark.asyncio
     async def test_get_region_by_id_success(self, mock_db, sample_region):
         from app.endpoints.regions import get_region
-        from fastapi import HTTPException
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = sample_region
 
-        with patch("app.endpoints.regions.select") as mock_select:
+        with patch("app.endpoints.regions.select"):
             mock_db.execute.return_value = mock_result
 
             result = await get_region(region_id=sample_region.id, db=mock_db)
@@ -86,7 +85,7 @@ class TestRegionsEndpoint:
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
 
-        with patch("app.endpoints.regions.select") as mock_select:
+        with patch("app.endpoints.regions.select"):
             mock_db.execute.return_value = mock_result
 
             with pytest.raises(HTTPException) as exc_info:

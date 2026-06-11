@@ -2,7 +2,6 @@ from sqlalchemy import Column, String, DateTime, Boolean, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from app.core.database import Base
-import uuid
 
 
 class PasswordResetToken(Base):

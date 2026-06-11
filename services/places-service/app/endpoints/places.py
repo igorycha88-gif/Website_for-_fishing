@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,8 +16,6 @@ from app.schemas.place import (
     FishTypeInPlace,
 )
 from app.crud import crud_place, crud_favorite_place
-from app.schemas.fish_type import FishTypeResponse
-from app.crud import crud_fish_type
 from app.models.fish_type import FishType
 
 logger = get_logger(__name__)

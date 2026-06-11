@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db, get_redis
 from app.core.logging_config import get_logger
-from app.schemas.fish_type import FishTypeCreate, FishTypeUpdate, FishTypeResponse
+from app.schemas.fish_type import FishTypeResponse
 from app.crud import crud_fish_type
 
 logger = get_logger(__name__)

@@ -40,7 +40,7 @@ class WeatherCollectorService:
         )
 
         result = await self.db.execute(
-            select(Region).where(Region.is_active == True).order_by(Region.name)
+            select(Region).where(Region.is_active).order_by(Region.name)
         )
         regions = result.scalars().all()
 
@@ -441,7 +441,7 @@ class WeatherCollectorService:
         self, region_id: UUID, days: int = 4
     ) -> Dict[str, Any]:
         result = await self.db.execute(
-            select(Region).where(Region.id == region_id, Region.is_active == True)
+            select(Region).where(Region.id == region_id, Region.is_active)
         )
         region = result.scalar_one_or_none()
 

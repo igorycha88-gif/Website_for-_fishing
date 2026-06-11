@@ -1,1 +1,1 @@
-from app.services.weather import WeatherService
+from app.services.weather import WeatherService as WeatherService

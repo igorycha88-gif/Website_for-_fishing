@@ -60,7 +60,7 @@ class PasswordResetTokenCRUD:
         result = await self.db.execute(
             update(PasswordResetToken)
             .where(PasswordResetToken.user_id == uuid_user_id)
-            .where(PasswordResetToken.used == False)
+            .where(not PasswordResetToken.used)
             .values(used=True, used_at=datetime.utcnow())
         )
         await self.db.commit()
@@ -71,7 +71,7 @@ class PasswordResetTokenCRUD:
         result = await self.db.execute(
             select(PasswordResetToken)
             .where(PasswordResetToken.user_id == uuid_user_id)
-            .where(PasswordResetToken.used == False)
+            .where(not PasswordResetToken.used)
             .where(PasswordResetToken.expires_at > datetime.utcnow())
             .order_by(PasswordResetToken.created_at.desc())
         )

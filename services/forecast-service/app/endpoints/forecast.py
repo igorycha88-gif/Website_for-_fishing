@@ -274,7 +274,7 @@ async def get_forecast(
     )
 
     result = await db.execute(
-        select(Region).where(Region.id == region_id, Region.is_active == True)
+        select(Region).where(Region.id == region_id, Region.is_active)
     )
     region = result.scalar_one_or_none()
 
@@ -468,7 +468,7 @@ async def get_forecast(
                             calc_result["bite_score"], avg_weather, fish_settings_obj
                         )
 
-                    fish_name_result = await db.execute(
+                    await db.execute(
                         select(FishBiteSettings.fish_type_id).where(
                             FishBiteSettings.id == fish_settings.id
                         )
@@ -524,7 +524,7 @@ async def get_forecast(
                     )
 
         if time_forecasts:
-            avg_score = sum(tf.bite_score for tf in time_forecasts) / len(
+            sum(tf.bite_score for tf in time_forecasts) / len(
                 time_forecasts
             )
 
@@ -565,7 +565,7 @@ async def get_forecast(
             )
         )
         custom_fish_records = custom_result.scalars().all()
-        custom_fish_type_ids = [cf.fish_type_id for cf in custom_fish_records]
+        [cf.fish_type_id for cf in custom_fish_records]
         existing_fish_type_ids = {ff.fish_type.id for ff in fish_forecasts}
 
         for cf in custom_fish_records:

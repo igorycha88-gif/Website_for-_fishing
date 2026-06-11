@@ -1,6 +1,5 @@
 from fastapi import FastAPI, Request
 from fastapi_limiter import FastAPILimiter
-from fastapi_limiter.depends import RateLimiter
 import redis.asyncio as redis
 from app.core.config import settings
 from app.core.logging_config import get_logger

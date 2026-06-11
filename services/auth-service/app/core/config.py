@@ -8,7 +8,7 @@ sys.path.append(
 )
 
 from pydantic_settings import BaseSettings
-from typing import Optional, List
+from typing import List
 
 logger = logging.getLogger(__name__)
 

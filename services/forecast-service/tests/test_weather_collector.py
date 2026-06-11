@@ -1,7 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4, UUID
-from datetime import datetime, date
+from uuid import uuid4
 from decimal import Decimal
 
 from app.services.weather_collector import WeatherCollectorService

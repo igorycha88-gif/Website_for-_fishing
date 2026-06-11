@@ -1,13 +1,8 @@
 import pytest
-import asyncio
-import uuid
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import Column, String, text, select
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import text, select
 from uuid import uuid4
-from datetime import datetime, date
-from decimal import Decimal
 
 from app.core.config import settings
 from app.models.fish_type import FishType
@@ -246,7 +241,6 @@ class TestFavoritePlace:
         db.add(favorite)
         await db.commit()
         await db.refresh(favorite)
-        favorite_id = favorite.id
 
         result = await db.execute(
             select(FavoritePlace).where(
@@ -287,7 +281,7 @@ class TestFavoritePlace:
         results = await crud.get_by_user(db=db, user_id=user_id)
 
         assert len(results) == 2
-        assert all(f.user_id == user_id)
+        assert all(fav.user_id == user_id for fav in results)
 
 
 @pytest.mark.asyncio
@@ -376,7 +370,7 @@ class TestPlace:
 
         assert results.total == 3
         assert len(results.places) == 3
-        assert all(p.owner_id == user_id)
+        assert all(p.owner_id == user_id for p in results.places)
 
     async def test_update_place(self, db: AsyncSession):
         user_id = uuid4()
@@ -939,9 +933,8 @@ class TestPlaceFishTypesValidation:
         assert f"Fish type with id {non_existent_id} not found" in str(exc_info.value)
 
     async def test_create_place_with_empty_fish_types(self, db: AsyncSession):
-        user_id = uuid4()
+        uuid4()
 
-        from app.crud.place import crud_place
         from app.schemas.place import PlaceCreate
         from pydantic import ValidationError
 
@@ -1024,7 +1017,7 @@ class TestPublicPlacesAPI:
 
         assert len(places) == 2
         assert all(p.visibility == "public" for p in places)
-        assert all(p.is_active == True for p in places)
+        assert all(p.is_active for p in places)
 
     async def test_count_public_places(self, db: AsyncSession):
         user_id = uuid4()

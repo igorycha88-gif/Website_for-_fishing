@@ -7,7 +7,6 @@ from sqlalchemy import (
     DateTime,
     Integer,
     ARRAY,
-    ForeignKey,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID, ARRAY as PG_ARRAY

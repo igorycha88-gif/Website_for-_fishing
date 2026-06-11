@@ -233,7 +233,7 @@ describe('Header Filter Module', () => {
           protocol: 'https:',
           pathname: '/api/v1/test',
         },
-      } as NextRequest;
+      } as unknown as NextRequest;
 
       const filteredHeaders = filterRequestHeaders(request);
 

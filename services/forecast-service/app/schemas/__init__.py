@@ -6,3 +6,12 @@ from app.schemas.forecast import (
     WeatherDataResponse,
     CurrentWeatherResponse,
 )
+
+__all__ = [
+    "RegionBase",
+    "RegionCreate",
+    "RegionResponse",
+    "RegionListResponse",
+    "WeatherDataResponse",
+    "CurrentWeatherResponse",
+]

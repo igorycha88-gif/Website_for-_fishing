@@ -1,9 +1,7 @@
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, func
-from sqlalchemy.orm import selectinload
-from decimal import Decimal
+from sqlalchemy import select, or_, func
 
 from app.models.place import Place
 from app.models.fish_type import FishType
@@ -434,7 +432,7 @@ class CRUDPlace:
             query = (
                 select(Place)
                 .where(Place.visibility == "public")
-                .where(Place.is_active == True)
+                .where(Place.is_active)
             )
 
             if place_type:
@@ -504,7 +502,7 @@ class CRUDPlace:
                 select(func.count())
                 .select_from(Place)
                 .where(Place.visibility == "public")
-                .where(Place.is_active == True)
+                .where(Place.is_active)
             )
 
             if place_type:
@@ -568,7 +566,7 @@ class CRUDPlace:
             query = (
                 select(Place)
                 .where(or_(Place.visibility == "public", Place.owner_id == user_id))
-                .where(Place.is_active == True)
+                .where(Place.is_active)
             )
 
             if place_type:
@@ -641,7 +639,7 @@ class CRUDPlace:
                 select(func.count())
                 .select_from(Place)
                 .where(or_(Place.visibility == "public", Place.owner_id == user_id))
-                .where(Place.is_active == True)
+                .where(Place.is_active)
             )
 
             if place_type:

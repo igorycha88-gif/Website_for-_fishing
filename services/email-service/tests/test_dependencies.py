@@ -1,6 +1,5 @@
 import pytest
 from fastapi import Request, HTTPException
-from fastapi.testclient import TestClient
 from unittest.mock import MagicMock
 import sys
 import os
@@ -16,7 +15,6 @@ os.environ.setdefault("SMTP_FROM_NAME", "FishMap")
 os.environ.setdefault("EMAIL_SERVICE_API_KEY", "test-api-key-for-testing-min-32-chars")
 
 from app.core.dependencies import verify_api_key
-from app.core.config import settings
 
 
 class TestVerifyApiKey:

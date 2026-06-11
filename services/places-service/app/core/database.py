@@ -1,5 +1,3 @@
-import sys
-import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from redis.asyncio import Redis
@@ -24,7 +22,7 @@ class Database:
         await self.engine.dispose()
 
 
-from app.core.config import settings
+from app.core.config import settings  # noqa: E402
 
 database = Database(settings.DATABASE_URL)
 redis_client = Redis.from_url(settings.REDIS_URL, decode_responses=False)

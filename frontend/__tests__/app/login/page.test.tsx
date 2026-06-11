@@ -36,11 +36,11 @@ describe('LoginPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     
-    (useAuthStore as jest.Mock).mockReturnValue({
+    (useAuthStore as unknown as unknown as jest.Mock).mockReturnValue({
       login: mockLogin,
     });
     
-    (useRateLimit as jest.Mock).mockReturnValue({
+    (useRateLimit as unknown as unknown as jest.Mock).mockReturnValue({
       isLimited: false,
       remainingSeconds: 0,
       startLimit: mockStartLimit,
@@ -50,7 +50,7 @@ describe('LoginPage', () => {
     mockFetch.mockReset();
     
     delete (window as unknown as { location?: { href: string } }).location;
-    window.location = { href: '' } as Location;
+    (window as unknown as { location: { href: string } }).location = { href: '' };
   });
 
   describe('Button blocking during rate limit', () => {
@@ -62,7 +62,7 @@ describe('LoginPage', () => {
     });
 
     it('should have submit button disabled when rate limited', () => {
-      (useRateLimit as jest.Mock).mockReturnValue({
+      (useRateLimit as unknown as jest.Mock).mockReturnValue({
         isLimited: true,
         remainingSeconds: 45,
         startLimit: mockStartLimit,
@@ -76,7 +76,7 @@ describe('LoginPage', () => {
     });
 
     it('should show remaining seconds in button text when rate limited', () => {
-      (useRateLimit as jest.Mock).mockReturnValue({
+      (useRateLimit as unknown as jest.Mock).mockReturnValue({
         isLimited: true,
         remainingSeconds: 30,
         startLimit: mockStartLimit,
@@ -95,7 +95,7 @@ describe('LoginPage', () => {
       let submitButton = screen.getByRole('button', { name: /войти/i });
       expect(submitButton).not.toBeDisabled();
       
-      (useRateLimit as jest.Mock).mockReturnValue({
+      (useRateLimit as unknown as jest.Mock).mockReturnValue({
         isLimited: true,
         remainingSeconds: 10,
         startLimit: mockStartLimit,
@@ -106,7 +106,7 @@ describe('LoginPage', () => {
       submitButton = screen.getByRole('button', { name: /подождите/i });
       expect(submitButton).toBeDisabled();
       
-      (useRateLimit as jest.Mock).mockReturnValue({
+      (useRateLimit as unknown as jest.Mock).mockReturnValue({
         isLimited: false,
         remainingSeconds: 0,
         startLimit: mockStartLimit,
@@ -179,7 +179,7 @@ describe('LoginPage', () => {
 
   describe('Input field disabling during rate limit', () => {
     it('should disable email input when rate limited', () => {
-      (useRateLimit as jest.Mock).mockReturnValue({
+      (useRateLimit as unknown as jest.Mock).mockReturnValue({
         isLimited: true,
         remainingSeconds: 30,
         startLimit: mockStartLimit,
@@ -193,7 +193,7 @@ describe('LoginPage', () => {
     });
 
     it('should disable password input when rate limited', () => {
-      (useRateLimit as jest.Mock).mockReturnValue({
+      (useRateLimit as unknown as jest.Mock).mockReturnValue({
         isLimited: true,
         remainingSeconds: 30,
         startLimit: mockStartLimit,
@@ -219,7 +219,7 @@ describe('LoginPage', () => {
 
   describe('Rate limit toast visibility', () => {
     it('should show rate limit toast when rate limited', () => {
-      (useRateLimit as jest.Mock).mockReturnValue({
+      (useRateLimit as unknown as jest.Mock).mockReturnValue({
         isLimited: true,
         remainingSeconds: 45,
         startLimit: mockStartLimit,
@@ -240,7 +240,7 @@ describe('LoginPage', () => {
 
   describe('Form submission during rate limit', () => {
     it('should not submit form when rate limited', async () => {
-      (useRateLimit as jest.Mock).mockReturnValue({
+      (useRateLimit as unknown as jest.Mock).mockReturnValue({
         isLimited: true,
         remainingSeconds: 30,
         startLimit: mockStartLimit,

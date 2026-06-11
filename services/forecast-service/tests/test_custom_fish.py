@@ -1,7 +1,6 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4, UUID
-from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 from app.endpoints.custom_fish import (
     get_custom_fish,
@@ -10,7 +9,7 @@ from app.endpoints.custom_fish import (
     get_all_fish_types,
     MAX_CUSTOM_FISH_PER_REGION,
 )
-from app.models.forecast import UserAddedFish, FishType, Region
+from app.models.forecast import FishType, Region
 
 
 @pytest.fixture

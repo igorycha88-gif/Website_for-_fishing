@@ -128,10 +128,10 @@ class TestSolunarPeriods:
                 assert 45 <= duration_min <= 75, f"Minor period duration {duration_min}min out of range"
 
     def test_solunar_strength_varies_with_phase(self):
-        moon = calculate_moon_phase(date(2024, 1, 11), MOSCOW_LAT, MOSCOW_LON)
+        calculate_moon_phase(date(2024, 1, 11), MOSCOW_LAT, MOSCOW_LON)
         data_new = calculate_solunar_periods(date(2024, 1, 11), MOSCOW_LAT, MOSCOW_LON)
 
-        moon = calculate_moon_phase(date(2024, 1, 18), MOSCOW_LAT, MOSCOW_LON)
+        calculate_moon_phase(date(2024, 1, 18), MOSCOW_LAT, MOSCOW_LON)
         data_quarter = calculate_solunar_periods(date(2024, 1, 18), MOSCOW_LAT, MOSCOW_LON)
 
         if data_new.major_periods and data_quarter.major_periods:

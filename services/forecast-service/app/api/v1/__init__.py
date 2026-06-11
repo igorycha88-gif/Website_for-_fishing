@@ -1,1 +1,1 @@
-from app.api.v1.router import router
+from app.api.v1.router import router as router

@@ -1,8 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select
 import json
 
 from app.models.fish_type import FishType

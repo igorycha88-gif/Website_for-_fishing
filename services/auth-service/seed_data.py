@@ -44,7 +44,7 @@ async def seed_users():
         )
 
         await session.commit()
-        print(f"✓ Seeded 1 test user: test@rybalka.ru / test123")
+        print("✓ Seeded 1 test user: test@rybalka.ru / test123")
 
 
 if __name__ == "__main__":

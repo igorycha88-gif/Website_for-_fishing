@@ -11,7 +11,7 @@ The fix: apply_pending_migrations() in main.py lifespan executes
 at every startup.  IF NOT EXISTS makes it idempotent.
 """
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 import sys
 import os
 

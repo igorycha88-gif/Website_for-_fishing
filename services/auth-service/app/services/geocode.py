@@ -1,5 +1,4 @@
 import json
-import logging
 from typing import Optional
 import httpx
 from redis.asyncio import Redis
