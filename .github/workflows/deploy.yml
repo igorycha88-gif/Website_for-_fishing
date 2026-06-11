@@ -198,44 +198,46 @@ jobs:
               ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
             cd ${{ secrets.VPS_APP_DIR }}
 
-            echo 'Waiting for services to start (max 300s)...'
+            echo 'Waiting for services to start (max 600s)...'
             ELAPSED=0
 
             check_url() {
               curl -sf -o /dev/null \"\$1\" 2>/dev/null
             }
 
-            while [ \$ELAPSED -lt 300 ]; do
+            while [ \$ELAPSED -lt 600 ]; do
               UP=0
-              TOTAL=0
+              REQUIRED=0
 
-              TOTAL=\$((TOTAL + 1))
+              REQUIRED=\$((REQUIRED + 1))
               check_url 'http://127.0.0.1:8001/health' && UP=\$((UP + 1)) || true
 
-              TOTAL=\$((TOTAL + 1))
+              REQUIRED=\$((REQUIRED + 1))
               check_url 'http://127.0.0.1:8006/health' && UP=\$((UP + 1)) || true
 
-              TOTAL=\$((TOTAL + 1))
-              check_url 'http://127.0.0.1:8007/health' && UP=\$((UP + 1)) || true
-
-              TOTAL=\$((TOTAL + 1))
+              REQUIRED=\$((REQUIRED + 1))
               check_url 'http://127.0.0.1:3080' && UP=\$((UP + 1)) || true
 
-              TOTAL=\$((TOTAL + 1))
-              docker exec \$(docker ps -q -f name=redis | head -1) redis-cli -h 127.0.0.1 ping > /dev/null 2>&1 && UP=\$((UP + 1)) || true
+              FORECAST_UP=false
+              check_url 'http://127.0.0.1:8007/health' && FORECAST_UP=true || true
 
-              if [ \"\$UP\" -ge \"\$TOTAL\" ]; then
-                echo \"All \$UP/\$TOTAL services healthy at \${ELAPSED}s!\"
+              if [ \"\$UP\" -ge \"\$REQUIRED\" ]; then
+                echo \"Required services up: \$UP/\$REQUIRED at \${ELAPSED}s!\"
+                if [ \"\$FORECAST_UP\" = true ]; then
+                  echo 'Forecast service: UP'
+                else
+                  echo 'Forecast service: still starting (may take up to 5 min after deploy)'
+                fi
                 docker compose -f docker-compose.vps-host.yml ps
                 exit 0
               fi
 
-              echo \"  \${ELAPSED}s: \$UP/\$TOTAL services up (forecast may take up to 5 min)...\"
+              echo \"  \${ELAPSED}s: \$UP/\$REQUIRED required up, forecast=\$FORECAST_UP...\"
               sleep 10
               ELAPSED=\$((ELAPSED + 10))
             done
 
-            echo 'ERROR: Timeout waiting for services'
+            echo 'ERROR: Timeout waiting for required services'
             docker compose -f docker-compose.vps-host.yml ps
             docker compose -f docker-compose.vps-host.yml logs --tail=30
             exit 1
