@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.2] - 2026-06-11
+
+### Исправлено
+- fix(lint): исправлены все ruff ошибки в 7 backend сервисах (неиспользуемые импорты, re-export алиасы)
+- fix(lint): исправлены TypeScript ошибки в frontend тестах (type casts)
+- fix(config): добавлены дефолтные значения Settings для CI (DATABASE_URL, REDIS_URL, SECRET_KEY)
+- fix(tests): исправлены падающие unit-тесты auth (10), forecast (1), places (1)
+- fix(places): добавлен pytest.ini с asyncio_mode=auto
+- fix(places): интеграционные тесты пропускаются при отсутствии PostgreSQL в CI
+- fix(forecast): добавлен places-service в docker-compose.vps.yml — fish_types не засевались на проде
+- fix(ci): увеличен healthcheck таймаут до 300с для прод деплоя
+- fix(ci): исправлен синтаксис deploy.yml — вложенные кавычки, порт фронтенда
+
 ## [1.2.1] - 2026-06-10
 
 ### Исправлено
