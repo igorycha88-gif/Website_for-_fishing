@@ -19,6 +19,8 @@ export interface Place {
   created_at: string;
   updated_at: string;
   is_favorite?: boolean;
+  depth?: number | null;
+  depth_source?: "auto" | "manual" | null;
 }
 
 export interface FishType {
@@ -61,6 +63,8 @@ export interface PlaceCreate {
   seasonality?: Array<"spring" | "summer" | "autumn" | "winter">;
   visibility: "private" | "public";
   images?: string[];
+  depth?: number | null;
+  depth_source?: "auto" | "manual";
 }
 
 export interface PlaceUpdate {

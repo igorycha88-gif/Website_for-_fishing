@@ -69,6 +69,10 @@ export default function MapPage() {
             isAuthenticated={isAuthenticated}
             onRegisterClick={handleRegisterClick}
             places={places}
+            showDepthPanel={true}
+            onAddPlaceClick={isAuthenticated ? (coords) => {
+              window.location.href = `/profile?lat=${coords.lat}&lon=${coords.lon}`;
+            } : undefined}
           />
         </div>
 

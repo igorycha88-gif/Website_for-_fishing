@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, MapPin, Upload, Image as ImageIcon, Info } from "lucide-react";
+import { X, MapPin, Upload, Image as ImageIcon, Info, Waves } from "lucide-react";
 import { usePlaces } from "@/hooks/usePlaces";
 import { FishType } from "@/types/place";
+import { useDepth } from "@/hooks/useDepth";
 
 interface AddPlaceFormProps {
   onCancel: () => void;
@@ -14,6 +15,9 @@ interface AddPlaceFormProps {
 
 export default function AddPlaceForm({ onCancel, initialCoordinates, initialAddress, onSave }: AddPlaceFormProps) {
   const { getFishTypes } = usePlaces();
+  const { depthData, queryDepth } = useDepth();
+  const [depthManual, setDepthManual] = useState<string>("");
+  const [depthManualMode, setDepthManualMode] = useState(false);
   
   const [formData, setFormData] = useState({
     name: "",
@@ -64,6 +68,12 @@ export default function AddPlaceForm({ onCancel, initialCoordinates, initialAddr
       }));
     }
   }, [initialCoordinates]);
+
+  useEffect(() => {
+    if (initialCoordinates && !depthManualMode) {
+      queryDepth(initialCoordinates.lat, initialCoordinates.lon);
+    }
+  }, [initialCoordinates, queryDepth, depthManualMode]);
 
   useEffect(() => {
     if (initialAddress !== undefined) {
@@ -126,7 +136,18 @@ export default function AddPlaceForm({ onCancel, initialCoordinates, initialAddr
 
     setLoading(true);
     try {
-      await onSave(formData);
+      const placeDepth = depthManualMode
+        ? (depthManual ? parseFloat(depthManual) : null)
+        : (depthData?.has_data ? depthData.depth : null);
+      const placeDepthSource = depthManualMode
+        ? (depthManual ? "manual" : null)
+        : (depthData?.has_data ? "auto" : null);
+
+      await onSave({
+        ...formData,
+        depth: placeDepth,
+        depth_source: placeDepthSource,
+      });
       setFormData({
         name: "",
         description: "",
@@ -241,6 +262,58 @@ export default function AddPlaceForm({ onCancel, initialCoordinates, initialAddr
             <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-lg">
               <Info className="w-4 h-4" />
               <span>Выберите точку на карте для установки координат</span>
+            </div>
+          )}
+
+          {initialCoordinates && (
+            <div className="flex items-center gap-3 bg-blue-50 px-4 py-3 rounded-lg">
+              <Waves className="w-5 h-5 text-blue-500 flex-shrink-0" />
+              {!depthManualMode ? (
+                <>
+                  <div className="flex-1">
+                    {depthData?.has_data && depthData.depth !== null ? (
+                      <span className="text-sm text-gray-700">
+                        Глубина: <strong className="text-blue-600">{depthData.depth.toFixed(1)} м</strong>
+                        <span className="text-gray-400 text-xs ml-2">(авто · {depthData.category})</span>
+                      </span>
+                    ) : (
+                      <span className="text-sm text-gray-500">Глубина неизвестна для этой точки</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDepthManualMode(true);
+                      setDepthManual(depthData?.depth?.toFixed(1) || "");
+                    }}
+                    className="text-xs text-primary-sea hover:underline flex-shrink-0"
+                  >
+                    ✏️ Указать вручную
+                  </button>
+                </>
+              ) : (
+                <div className="flex-1 flex items-center gap-2">
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={depthManual}
+                    onChange={(e) => setDepthManual(e.target.value)}
+                    placeholder="0.0"
+                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                  />
+                  <span className="text-sm text-gray-600">м</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDepthManualMode(false);
+                      setDepthManual("");
+                    }}
+                    className="text-xs text-gray-500 hover:underline ml-2"
+                  >
+                    Авто
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

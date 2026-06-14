@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Map, Placemark, YMaps, Clusterer } from "@pbe/react-yandex-maps";
 import { Place } from "@/types/place";
 import { Navigation } from "lucide-react";
+import LayersPanel from "./LayersPanel";
+import DepthPopup from "./DepthPopup";
+import type { DepthLayerConfig, DepthResponse } from "@/types/depth";
+import { useDepth } from "@/hooks/useDepth";
 
 interface YandexMapProps {
   city?: string | null;
@@ -25,6 +29,7 @@ interface YandexMapProps {
   onFiltersChange?: (filters: any) => void;
   onFavoriteClick?: (placeId: string) => void;
   tempMarker?: { lat: number; lon: number } | null;
+  showDepthPanel?: boolean;
 }
 
 const YANDEX_API_KEY = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY;
@@ -197,12 +202,23 @@ export default function YandexMap({
   onFiltersChange,
   onFavoriteClick,
   tempMarker,
+  showDepthPanel = false,
 }: YandexMapProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mapCenter, setMapCenter] = useState<[number, number]>([55.7558, 37.6173]);
   const [zoom, setZoom] = useState(8);
   const [geolocationError, setGeolocationError] = useState<string | null>(null);
+  const [depthConfig, setDepthConfig] = useState<DepthLayerConfig>({
+    enabled: false,
+    opacity: 0.6,
+    showIsobaths: false,
+  });
+  const [depthPopupPos, setDepthPopupPos] = useState<{ x: number; y: number } | null>(null);
+
+  const mapRef = useRef<any>(null);
+  const depthLayerRef = useRef<any>(null);
+  const { loading: depthLoading, depthData, queryDepth, clearDepth } = useDepth();
 
   useEffect(() => {
     console.log('[YandexMap] Component mounted, loading:', loading, 'places:', places.length);
@@ -237,6 +253,38 @@ export default function YandexMap({
     }
   }, [city]);
 
+  useEffect(() => {
+    const ymaps = (window as any).ymaps;
+    if (!ymaps || !mapRef.current) return;
+
+    const map = mapRef.current;
+
+    if (depthConfig.enabled) {
+      if (!depthLayerRef.current) {
+        const layer = new ymaps.Layer(
+          "/api/v1/depth/tiles/%z/%x/%y.png",
+          {
+            tileTransparent: true,
+            opacity: depthConfig.opacity,
+          }
+        );
+        map.layers.add(layer);
+        depthLayerRef.current = layer;
+      } else {
+        depthLayerRef.current.options.set("opacity", depthConfig.opacity);
+      }
+    } else {
+      if (depthLayerRef.current) {
+        try {
+          map.layers.remove(depthLayerRef.current);
+        } catch (e) {
+          console.warn("[YandexMap] Failed to remove depth layer:", e);
+        }
+        depthLayerRef.current = null;
+      }
+    }
+  }, [depthConfig.enabled, depthConfig.opacity]);
+
   const handleGeolocate = () => {
     if (!navigator.geolocation) {
       setGeolocationError("Геолокация не поддерживается вашим браузером");
@@ -256,10 +304,10 @@ export default function YandexMap({
   };
 
   const handleMapClick = async (e: any) => {
-    if (!onAddPlaceClick) return;
-
     const coords = e.get("coords");
-    if (coords) {
+    if (!coords) return;
+
+    if (onAddPlaceClick) {
       const ymaps = (window as any).ymaps;
       let address: string | undefined;
       
@@ -280,6 +328,15 @@ export default function YandexMap({
       }
       
       onAddPlaceClick({ lat: coords[0], lon: coords[1] }, address);
+      return;
+    }
+
+    if (showDepthPanel) {
+      const globalCoords = e.get("globalPixels") || e.get("pagePixels");
+      const clientX = e.get("domEvent")?.get?.("clientX") ?? (globalCoords ? globalCoords[0] : 0);
+      const clientY = e.get("domEvent")?.get?.("clientY") ?? (globalCoords ? globalCoords[1] : 0);
+      setDepthPopupPos({ x: clientX, y: clientY });
+      await queryDepth(coords[0], coords[1]);
     }
   };
 
@@ -361,6 +418,7 @@ export default function YandexMap({
           state={mapState}
           width="100%"
           height="100%"
+          instance={mapRef}
           onLoad={() => {
             console.log('[YandexMap] Map loaded successfully');
             setLoading(false);
@@ -390,6 +448,7 @@ export default function YandexMap({
                         <p style="margin: 0; font-size: 14px; color: #666;">
                           ${place.place_type === "wild" ? "Дикое место" : place.place_type === "camping" ? "Кэмпинг" : "База отдыха"}
                         </p>
+                        ${place.depth != null ? `<p style="margin: 4px 0 0 0; font-size: 13px; color: #0288D1;">🌊 Глубина: ${place.depth.toFixed(1)} м</p>` : ""}
                         ${place.fish_types && place.fish_types.length > 0 ? 
                           `<p style="margin: 4px 0 0 0; font-size: 12px;">
                             ${place.fish_types.slice(0, 3).map(f => `${f.icon || "🐟"} ${f.name}`).join(", ")}
@@ -528,6 +587,31 @@ export default function YandexMap({
             </div>
           </div>
         </div>
+      )}
+
+      {showDepthPanel && !showFilters && (
+        <LayersPanel config={depthConfig} onChange={setDepthConfig} />
+      )}
+
+      {showDepthPanel && depthPopupPos && (
+        <DepthPopup
+          data={depthData}
+          loading={depthLoading}
+          position={depthPopupPos}
+          onClose={() => {
+            setDepthPopupPos(null);
+            clearDepth();
+          }}
+          onAddPlace={
+            isAuthenticated
+              ? (lat, lon) => {
+                  setDepthPopupPos(null);
+                  clearDepth();
+                  onAddPlaceClick?.({ lat, lon });
+                }
+              : undefined
+          }
+        />
       )}
     </div>
   );

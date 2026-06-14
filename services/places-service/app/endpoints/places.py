@@ -50,6 +50,8 @@ async def _enrich_place_with_fish_types(
         "place_type": place.place_type,
         "access_type": place.access_type,
         "water_type": place.water_type,
+        "depth": float(place.depth) if place.depth else None,
+        "depth_source": place.depth_source,
         "fish_types": fish_types_data,
         "seasonality": place.seasonality,
         "visibility": place.visibility,

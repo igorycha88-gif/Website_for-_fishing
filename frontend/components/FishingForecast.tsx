@@ -664,6 +664,7 @@ export default function FishingForecast({
                     const season = firstForecast?.current_season;
                     const baits = firstForecast?.recommended_baits;
                     const lures = firstForecast?.recommended_lures;
+                    const bestDepth = firstForecast?.best_depth;
                     const category = fishForecast.fish_type.category;
                 
                 return (
@@ -774,11 +775,16 @@ export default function FishingForecast({
                           ))}
                         </div>
                         
-                        {(baits && baits.length > 0 || lures && lures.length > 0) && season && (
+                        {(baits && baits.length > 0 || lures && lures.length > 0 || bestDepth) && season && (
                           <div className="mt-3 p-2 bg-blue-50 rounded-lg">
                             <div className="text-xs font-medium text-blue-700 mb-1">
                               🎣 Рекомендации ({getSeasonLabel(season)}):
                             </div>
+                            {bestDepth && (
+                              <div className="text-sm text-gray-600">
+                                <span className="font-medium">🌊 Глубина:</span> {bestDepth}
+                              </div>
+                            )}
                             {baits && baits.length > 0 && (
                               <div className="text-sm text-gray-600">
                                 <span className="font-medium">Наживки:</span> {baits.join(", ")}

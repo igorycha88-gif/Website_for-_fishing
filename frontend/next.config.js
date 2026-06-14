@@ -14,6 +14,7 @@ const nextConfig = {
     const shopHost = isDocker ? 'http://shop-service:8004' : 'http://localhost:8005';
     const emailHost = isDocker ? 'http://email-service:8005' : 'http://localhost:8006';
     const forecastHost = isDocker ? 'http://forecast-service:8000' : 'http://localhost:8007';
+    const depthHost = isDocker ? 'http://depth-service:8000' : 'http://localhost:8008';
 
     return [
       {
@@ -59,6 +60,10 @@ const nextConfig = {
       {
         source: '/api/v1/regions/:path*',
         destination: `${forecastHost}/api/v1/regions/:path*`,
+      },
+      {
+        source: '/api/v1/depth/:path*',
+        destination: `${depthHost}/api/v1/depth/:path*`,
       },
     ];
   },

@@ -33,6 +33,9 @@ class Place(Base):
     access_type = Column(String(20), nullable=False)
     water_type = Column(String(20), nullable=False, default="lake")
 
+    depth = Column(Numeric(6, 2))
+    depth_source = Column(String(10), default="auto")
+
     fish_types = Column(PG_ARRAY(UUID(as_uuid=True)), nullable=False)
     seasonality = Column(ARRAY(String))
 

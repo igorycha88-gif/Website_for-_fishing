@@ -34,6 +34,8 @@ class PlaceBase(BaseModel):
     images: List[str] = Field(
         default_factory=list, max_length=4, description="URL фото (максимум 4)"
     )
+    depth: Optional[Decimal] = Field(None, ge=0, description="Глубина в метрах")
+    depth_source: Optional[str] = Field(None, description="Источник: auto, manual")
 
     @field_validator("water_type")
     @classmethod
@@ -63,6 +65,8 @@ class PlaceBaseForResponse(BaseModel):
     images: List[str] = Field(
         default_factory=list, max_length=4, description="URL фото (максимум 4)"
     )
+    depth: Optional[Decimal] = Field(None, ge=0, description="Глубина в метрах")
+    depth_source: Optional[str] = Field(None, description="Источник: auto, manual")
 
     @field_validator("place_type")
     @classmethod
@@ -126,6 +130,8 @@ class PlaceUpdate(BaseModel):
     seasonality: Optional[List[str]] = None
     visibility: Optional[str] = None
     images: Optional[List[str]] = Field(None, max_length=4)
+    depth: Optional[Decimal] = Field(None, ge=0)
+    depth_source: Optional[str] = None
 
     @field_validator("place_type")
     @classmethod
