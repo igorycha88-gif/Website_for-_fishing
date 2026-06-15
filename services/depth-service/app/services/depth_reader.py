@@ -220,7 +220,7 @@ async def _query_gebco_api(lat: float, lon: float) -> dict:
     }
 
 
-async def fetch_tile(z: int, x: int, y: int) -> bytes | None:
+async def fetch_tile(z: int, x: int, y: int, scheme: str = "navionics") -> bytes | None:
     logger.info(
         "depth_tile_request",
         service="depth-service",
@@ -228,14 +228,52 @@ async def fetch_tile(z: int, x: int, y: int) -> bytes | None:
         z=z,
         x=x,
         y=y,
+        scheme=scheme,
     )
+
+    cache_dir = Path(settings.TILE_CACHE_DIR) / scheme
+    if cache_dir.exists():
+        tile_path = cache_dir / f"{z}" / f"{x}" / f"{y}.png"
+        if tile_path.exists():
+            logger.info(
+                "depth_tile_cache_hit",
+                service="depth-service",
+                action="depth_tile",
+                z=z,
+                x=x,
+                y=y,
+            )
+            return tile_path.read_bytes()
 
     if _TILES_DIR is not None:
         tile_path = _TILES_DIR / f"{z}" / f"{x}" / f"{y}.png"
         if tile_path.exists():
             return tile_path.read_bytes()
 
-    return await _proxy_gebco_wms(z, x, y)
+    raw_tile = await _proxy_gebco_wms(z, x, y)
+    if raw_tile is None:
+        return None
+
+    if settings.TILE_RECOLOR:
+        from app.services.tile_recolor import recolor_tile
+
+        result_tile = recolor_tile(raw_tile, scheme=scheme)
+    else:
+        result_tile = raw_tile
+
+    try:
+        cache_path = cache_dir / f"{z}" / f"{x}" / f"{y}.png"
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_bytes(result_tile)
+    except Exception as e:
+        logger.warning(
+            "depth_tile_cache_write_error",
+            service="depth-service",
+            action="depth_tile",
+            error=str(e),
+        )
+
+    return result_tile
 
 
 async def _proxy_gebco_wms(z: int, x: int, y: int) -> bytes | None:

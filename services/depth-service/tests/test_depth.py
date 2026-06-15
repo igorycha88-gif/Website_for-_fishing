@@ -14,7 +14,7 @@ class TestHealth:
         data = response.json()
         assert data["status"] == "healthy"
         assert data["service"] == "depth-service"
-        assert data["data_source"] == "GEBCO"
+        assert data["data_source"] == "GEBCO + OSM + GVR"
 
 
 class TestDepthEstimation:

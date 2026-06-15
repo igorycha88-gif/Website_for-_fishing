@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     GEBCO_QUERY_LAYER: str = "GEBCO_LATEST_2"
     GEBCO_GEOTIFF_PATH: str = ""
     TILE_CACHE_DIR: str = "/tmp/depth_tiles"
+    TILE_RECOLOR: bool = True
     REDIS_URL: str = "redis://redis:6379/0"
     RATE_LIMIT_PER_MIN: int = 60
 
@@ -19,6 +20,8 @@ class Settings(BaseSettings):
 
     DEPTH_CACHE_TTL: int = 86400
 
+    POLYGON_SEED_ON_STARTUP: bool = True
+
     DATABASE_URL: str = (
         "postgresql+asyncpg://postgres:postgres_password@postgres:5432/fishing_db"
     )
@@ -26,6 +29,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"
 
 
 settings = Settings()

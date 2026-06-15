@@ -6,8 +6,10 @@ import { Place } from "@/types/place";
 import { Navigation } from "lucide-react";
 import LayersPanel from "./LayersPanel";
 import DepthPopup from "./DepthPopup";
-import type { DepthLayerConfig, DepthResponse } from "@/types/depth";
+import type { DepthLayerConfig, DepthResponse, ColorScheme } from "@/types/depth";
 import { useDepth } from "@/hooks/useDepth";
+import { useDepthAreas } from "@/hooks/useDepthAreas";
+import { useDepthLabels } from "@/hooks/useDepthLabels";
 
 interface YandexMapProps {
   city?: string | null;
@@ -213,12 +215,30 @@ export default function YandexMap({
     enabled: false,
     opacity: 0.6,
     showIsobaths: false,
+    showLabels: true,
+    colorScheme: "navionics" as ColorScheme,
   });
   const [depthPopupPos, setDepthPopupPos] = useState<{ x: number; y: number } | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const mapReadySetRef = useRef(false);
 
   const mapRef = useRef<any>(null);
   const depthLayerRef = useRef<any>(null);
+  const depthAreasRef = useRef<any[]>([]);
+  const depthLabelsRef = useRef<any[]>([]);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overlayRequestIdRef = useRef(0);
   const { loading: depthLoading, depthData, queryDepth, clearDepth } = useDepth();
+  const { fetchAreas } = useDepthAreas();
+  const { fetchLabels } = useDepthLabels();
+
+  const handleInstanceRef = useCallback((instance: any) => {
+    mapRef.current = instance;
+    if (instance && !mapReadySetRef.current) {
+      mapReadySetRef.current = true;
+      setMapReady(true);
+    }
+  }, []);
 
   useEffect(() => {
     console.log('[YandexMap] Component mounted, loading:', loading, 'places:', places.length);
@@ -255,35 +275,142 @@ export default function YandexMap({
 
   useEffect(() => {
     const ymaps = (window as any).ymaps;
-    if (!ymaps || !mapRef.current) return;
-
     const map = mapRef.current;
+    if (!ymaps || !map) return;
 
-    if (depthConfig.enabled) {
-      if (!depthLayerRef.current) {
-        const layer = new ymaps.Layer(
-          "/api/v1/depth/tiles/%z/%x/%y.png",
-          {
-            tileTransparent: true,
-            opacity: depthConfig.opacity,
-          }
-        );
-        map.layers.add(layer);
-        depthLayerRef.current = layer;
-      } else {
-        depthLayerRef.current.options.set("opacity", depthConfig.opacity);
-      }
-    } else {
+    const clearDepthOverlays = () => {
+      depthAreasRef.current.forEach((obj) => {
+        try { map.geoObjects.remove(obj); } catch {}
+      });
+      depthLabelsRef.current.forEach((obj) => {
+        try { map.geoObjects.remove(obj); } catch {}
+      });
+      depthAreasRef.current = [];
+      depthLabelsRef.current = [];
+    };
+
+    if (!depthConfig.enabled) {
+      clearDepthOverlays();
       if (depthLayerRef.current) {
-        try {
-          map.layers.remove(depthLayerRef.current);
-        } catch (e) {
+        try { map.layers.remove(depthLayerRef.current); } catch (e) {
           console.warn("[YandexMap] Failed to remove depth layer:", e);
         }
         depthLayerRef.current = null;
       }
+      return;
     }
-  }, [depthConfig.enabled, depthConfig.opacity]);
+
+    if (!depthLayerRef.current) {
+      const layer = new ymaps.Layer(
+        `/api/v1/depth/tiles/%z/%x/%y.png?scheme=${depthConfig.colorScheme}`,
+        { tileTransparent: true, opacity: depthConfig.opacity }
+      );
+      map.layers.add(layer);
+      depthLayerRef.current = layer;
+    } else {
+      depthLayerRef.current.options.set("opacity", depthConfig.opacity);
+    }
+
+    const opacityHex = Math.round(depthConfig.opacity * 255)
+      .toString(16)
+      .padStart(2, "0");
+
+    const updateOverlays = async () => {
+      const requestId = ++overlayRequestIdRef.current;
+      const bounds = map.getBounds();
+      const zoom = map.getZoom();
+      const [[minLat, minLon], [maxLat, maxLon]] = bounds;
+
+      const [areasData, labelsData] = await Promise.all([
+        fetchAreas(minLat, minLon, maxLat, maxLon, depthConfig.colorScheme),
+        depthConfig.showLabels
+          ? fetchLabels(minLat, minLon, maxLat, maxLon, zoom)
+          : Promise.resolve(null),
+      ]);
+
+      if (requestId !== overlayRequestIdRef.current || !mapRef.current) return;
+      clearDepthOverlays();
+
+      if (areasData) {
+        areasData.features.forEach((feature) => {
+          const geoCoords = feature.geometry.coordinates;
+          const yandexCoords = geoCoords.map((ring: number[][]) =>
+            ring.map((pt: number[]) => [pt[1], pt[0]])
+          );
+
+          const fillColor = feature.properties.color
+            ? feature.properties.color + opacityHex
+            : "#888888" + opacityHex;
+
+          const polygon = new ymaps.Polygon(
+            yandexCoords,
+            {
+              hintContent: `${feature.properties.name}: ${
+                feature.properties.depth != null
+                  ? feature.properties.depth.toFixed(1) + "м"
+                  : "глубина неизвестна"
+              }`,
+            },
+            {
+              fillColor,
+              strokeColor: depthConfig.showIsobaths
+                ? "#FFFFFFCC"
+                : feature.properties.color + "CC",
+              strokeWidth: depthConfig.showIsobaths ? 2 : 1,
+              strokeOpacity: 0.8,
+            }
+          );
+          map.geoObjects.add(polygon);
+          depthAreasRef.current.push(polygon);
+        });
+      }
+
+      if (labelsData) {
+        labelsData.features.forEach((feature) => {
+          const [lon, lat] = feature.geometry.coordinates;
+          const placemark = new ymaps.Placemark(
+            [lat, lon],
+            {
+              iconContent: feature.properties.label,
+              hintContent: `${feature.properties.name} — ${feature.properties.label}`,
+            },
+            {
+              iconLayout: ymaps.templateLayoutFactory.createClass(
+                `<div style="background:rgba(255,255,255,0.85);padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700;color:#01579B;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,0.2);">$[[options.iconContent]]</div>`
+              ),
+              iconOffset: [-20, -10],
+              iconPane: "overlaps",
+            }
+          );
+          map.geoObjects.add(placemark);
+          depthLabelsRef.current.push(placemark);
+        });
+      }
+    };
+
+    const debouncedUpdate = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => updateOverlays().catch(console.error), 350);
+    };
+
+    map.events.add("boundschange", debouncedUpdate);
+    updateOverlays().catch(console.error);
+
+    return () => {
+      map.events.remove("boundschange", debouncedUpdate);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      clearDepthOverlays();
+    };
+  }, [
+    depthConfig.enabled,
+    depthConfig.opacity,
+    depthConfig.showIsobaths,
+    depthConfig.showLabels,
+    depthConfig.colorScheme,
+    fetchAreas,
+    fetchLabels,
+    mapReady,
+  ]);
 
   const handleGeolocate = () => {
     if (!navigator.geolocation) {
@@ -418,7 +545,7 @@ export default function YandexMap({
           state={mapState}
           width="100%"
           height="100%"
-          instance={mapRef}
+          instanceRef={handleInstanceRef}
           onLoad={() => {
             console.log('[YandexMap] Map loaded successfully');
             setLoading(false);

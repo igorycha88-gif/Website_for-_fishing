@@ -37,6 +37,7 @@ services:
       - ./database/migrations/008_forecast_v5_fields.sql:/docker-entrypoint-initdb.d/11-migration-008.sql
       - ./database/migrations/009_add_depth_to_places.sql:/docker-entrypoint-initdb.d/12-migration-009.sql
       - ./database/migrations/010_create_ru_water_bodies.sql:/docker-entrypoint-initdb.d/13-migration-010.sql
+      - ./database/migrations/011_create_water_body_polygons.sql:/docker-entrypoint-initdb.d/14-migration-011.sql
     ports:
       - "5432:5432"
     networks:
