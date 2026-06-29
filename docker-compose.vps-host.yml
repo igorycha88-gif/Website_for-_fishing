@@ -196,6 +196,7 @@ services:
     network_mode: host
     environment:
       DOCKER_ENV: "false"
+      HOSTNAME: "127.0.0.1"
       AUTH_SERVICE_URL: http://127.0.0.1:8001
       PLACES_SERVICE_URL: http://127.0.0.1:8008
       REPORTS_SERVICE_URL: http://127.0.0.1:8003
