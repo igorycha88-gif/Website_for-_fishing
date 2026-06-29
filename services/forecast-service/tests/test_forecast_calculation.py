@@ -35,6 +35,11 @@ from app.services.forecast_calculation import (
     estimate_water_temperature,
     REGION_CODE_TO_ZONE,
     WINTER_MONTHLY_MULTIPLIERS,
+    calculate_moon_time_modifier,
+    _phase_base_rating,
+    _days_to_nearest_phase_from_value,
+    _activity_window_bonus,
+    _preference_adjustment,
 )
 
 
@@ -1748,6 +1753,42 @@ class TestCalculateWaterLevelScore:
 
 class TestMoonPhasePreference:
     def test_full_moon_preference(self):
+        fish_pref = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Судак",
+            optimal_temp_min=Decimal("8"),
+            optimal_temp_max=Decimal("25"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=770,
+            max_wind_speed=Decimal("6"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=False,
+            moon_sensitivity=Decimal("0.5"),
+            active_in_winter=False,
+            moon_phase_preference="full_moon",
+        )
+        fish_neutral = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Судак",
+            optimal_temp_min=Decimal("8"),
+            optimal_temp_max=Decimal("25"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=770,
+            max_wind_speed=Decimal("6"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=False,
+            moon_sensitivity=Decimal("0.5"),
+            active_in_winter=False,
+            moon_phase_preference="neutral",
+        )
+        weather_full = WeatherConditions(moon_phase=Decimal("0.5"))
+        score_pref = calculate_moon_score(weather_full, fish_pref, "summer")
+        score_neutral = calculate_moon_score(weather_full, fish_neutral, "summer")
+        assert score_pref > score_neutral
+
+    def test_full_moon_preference_advantage_is_at_night(self):
         fish = FishSettings(
             fish_type_id=uuid4(),
             fish_name="Судак",
@@ -1763,11 +1804,15 @@ class TestMoonPhasePreference:
             active_in_winter=False,
             moon_phase_preference="full_moon",
         )
-        weather_full = WeatherConditions(moon_phase=Decimal("0.5"))
-        weather_new = WeatherConditions(moon_phase=Decimal("0.0"))
-        score_full = calculate_moon_score(weather_full, fish, "summer")
-        score_new = calculate_moon_score(weather_new, fish, "summer")
-        assert score_full > score_new
+        night_factor = calculate_moon_time_modifier(
+            "full", TimeOfDay.NIGHT, fish.moon_phase_preference
+        )
+        day_factor = calculate_moon_time_modifier(
+            "full", TimeOfDay.DAY, fish.moon_phase_preference
+        )
+        assert night_factor == 1.20
+        assert day_factor == 0.75
+        assert night_factor > day_factor
 
     def test_new_moon_preference(self):
         fish = FishSettings(
@@ -1984,3 +2029,298 @@ class TestBiteScoreV5:
         )
         if result["is_spawn_period"]:
             assert result["calculation_details"] is None
+
+
+class TestPhaseBaseRating:
+    def test_anchors(self):
+        assert _phase_base_rating(0.0) == 90.0
+        assert _phase_base_rating(0.25) == 80.0
+        assert _phase_base_rating(0.5) == 45.0
+        assert _phase_base_rating(0.75) == 78.0
+
+    def test_new_moon_highest(self):
+        assert _phase_base_rating(0.0) > _phase_base_rating(0.25)
+        assert _phase_base_rating(0.0) > _phase_base_rating(0.75)
+
+    def test_full_moon_lowest(self):
+        assert _phase_base_rating(0.5) < _phase_base_rating(0.0)
+        assert _phase_base_rating(0.5) < _phase_base_rating(0.25)
+        assert _phase_base_rating(0.5) < _phase_base_rating(0.75)
+
+    def test_full_moon_difference_is_large(self):
+        assert (_phase_base_rating(0.0) - _phase_base_rating(0.5)) >= 40.0
+
+    def test_wraps_at_one(self):
+        assert _phase_base_rating(1.0) == _phase_base_rating(0.0)
+        assert abs(_phase_base_rating(0.9) - 85.2) < 0.1
+
+    def test_interpolation_midpoints(self):
+        assert abs(_phase_base_rating(0.125) - 85.0) < 0.1
+        assert abs(_phase_base_rating(0.375) - 62.5) < 0.1
+        assert abs(_phase_base_rating(0.625) - 61.5) < 0.1
+        assert abs(_phase_base_rating(0.875) - 84.0) < 0.1
+
+
+class TestActivityWindowBonus:
+    def test_within_window(self):
+        assert _activity_window_bonus(0.0) == 15.0
+        assert _activity_window_bonus(2.0) == 15.0
+        assert _activity_window_bonus(3.0) == 15.0
+
+    def test_outside_window(self):
+        assert _activity_window_bonus(6.0) == 0.0
+        assert _activity_window_bonus(10.0) == 0.0
+
+    def test_tapers_between_3_and_6(self):
+        bonus_4 = _activity_window_bonus(4.0)
+        bonus_5 = _activity_window_bonus(5.0)
+        assert 0 < bonus_5 < bonus_4 < 15.0
+
+    def test_from_phase_value_new_moon(self):
+        assert _days_to_nearest_phase_from_value(0.0) < 0.5
+        assert _days_to_nearest_phase_from_value(0.5) < 0.5
+
+    def test_from_phase_value_quarter(self):
+        days = _days_to_nearest_phase_from_value(0.25)
+        assert 6.0 < days < 9.0
+
+
+class TestPreferenceAdjustment:
+    def test_new_moon_preference_at_new(self):
+        assert _preference_adjustment(0.0, "new_moon") == 15.0
+
+    def test_new_moon_preference_far(self):
+        assert _preference_adjustment(0.5, "new_moon") == 0.0
+
+    def test_full_moon_preference_at_full(self):
+        assert _preference_adjustment(0.5, "full_moon") == 15.0
+
+    def test_full_moon_preference_far(self):
+        assert _preference_adjustment(0.0, "full_moon") == 0.0
+
+    def test_neutral_no_adjustment(self):
+        for phase in [0.0, 0.25, 0.5, 0.75]:
+            assert _preference_adjustment(phase, "neutral") == 0.0
+
+    def test_both_preference_at_transitions(self):
+        assert _preference_adjustment(0.0, "both") == 10.0
+        assert _preference_adjustment(0.5, "both") == 10.0
+
+
+class TestMoonScoreV6:
+    @pytest.fixture
+    def high_sensitivity_fish(self):
+        return FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Тест",
+            optimal_temp_min=Decimal("4"),
+            optimal_temp_max=Decimal("22"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("8"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("1.0"),
+            active_in_winter=True,
+            moon_phase_preference="neutral",
+        )
+
+    def test_new_moon_higher_than_full_moon(self, high_sensitivity_fish):
+        weather_new = WeatherConditions(
+            moon_phase=Decimal("0.0"),
+            moon_phase_region="new",
+            moon_days_to_nearest_phase=0.0,
+        )
+        weather_full = WeatherConditions(
+            moon_phase=Decimal("0.5"),
+            moon_phase_region="full",
+            moon_days_to_nearest_phase=0.0,
+        )
+        score_new = calculate_moon_score(
+            weather_new, high_sensitivity_fish, "autumn"
+        )
+        score_full = calculate_moon_score(
+            weather_full, high_sensitivity_fish, "autumn"
+        )
+        assert score_new > score_full
+        assert (score_new - score_full) >= 30.0
+
+    def test_new_moon_higher_than_quarters(self, high_sensitivity_fish):
+        weather_new = WeatherConditions(
+            moon_phase=Decimal("0.0"),
+            moon_phase_region="new",
+            moon_days_to_nearest_phase=0.0,
+        )
+        for phase, region in [(Decimal("0.25"), "waxing"), (Decimal("0.75"), "waning")]:
+            weather = WeatherConditions(
+                moon_phase=phase,
+                moon_phase_region=region,
+                moon_days_to_nearest_phase=7.38,
+            )
+            score = calculate_moon_score(weather, high_sensitivity_fish, "autumn")
+            assert calculate_moon_score(
+                weather_new, high_sensitivity_fish, "autumn"
+            ) > score
+
+    def test_activity_window_boosts_score(self, high_sensitivity_fish):
+        weather_in_window = WeatherConditions(
+            moon_phase=Decimal("0.25"),
+            moon_phase_region="waxing",
+            moon_days_to_nearest_phase=1.0,
+        )
+        weather_outside = WeatherConditions(
+            moon_phase=Decimal("0.25"),
+            moon_phase_region="waxing",
+            moon_days_to_nearest_phase=8.0,
+        )
+        score_in = calculate_moon_score(
+            weather_in_window, high_sensitivity_fish, "autumn"
+        )
+        score_out = calculate_moon_score(
+            weather_outside, high_sensitivity_fish, "autumn"
+        )
+        assert score_in > score_out
+
+    def test_preference_new_moon_boosts(self):
+        fish = FishSettings(
+            fish_type_id=uuid4(),
+            fish_name="Лещ",
+            optimal_temp_min=Decimal("8"),
+            optimal_temp_max=Decimal("24"),
+            optimal_pressure_min=755,
+            optimal_pressure_max=765,
+            max_wind_speed=Decimal("6"),
+            prefer_morning=True,
+            prefer_evening=True,
+            prefer_overcast=True,
+            moon_sensitivity=Decimal("1.0"),
+            active_in_winter=False,
+            moon_phase_preference="new_moon",
+        )
+        weather = WeatherConditions(
+            moon_phase=Decimal("0.0"),
+            moon_phase_region="new",
+            moon_days_to_nearest_phase=0.0,
+        )
+        score = calculate_moon_score(weather, fish, "autumn")
+        assert score >= 80.0
+
+    def test_solunar_major_still_boosts(self, fish_settings):
+        weather_normal = WeatherConditions(moon_phase=Decimal("0.0"))
+        weather_major = WeatherConditions(
+            moon_phase=Decimal("0.0"), is_solunar_major=True, solunar_strength=0.9
+        )
+        assert calculate_moon_score(weather_major, fish_settings, "spring") > (
+            calculate_moon_score(weather_normal, fish_settings, "spring")
+        )
+
+    def test_fallback_when_region_missing(self, fish_settings):
+        weather = WeatherConditions(moon_phase=Decimal("0.0"))
+        score = calculate_moon_score(weather, fish_settings, "summer")
+        assert 0.0 <= score <= 100.0
+
+    def test_none_phase_returns_default(self, fish_settings):
+        weather = WeatherConditions(moon_phase=None)
+        assert calculate_moon_score(weather, fish_settings) == 50.0
+
+
+class TestMoonTimeModifier:
+    def test_new_moon_daytime_boost(self):
+        assert calculate_moon_time_modifier("new", TimeOfDay.MORNING) == 1.10
+        assert calculate_moon_time_modifier("new", TimeOfDay.DAY) == 1.10
+
+    def test_full_moon_daytime_penalty(self):
+        assert calculate_moon_time_modifier("full", TimeOfDay.MORNING) == 0.80
+        assert calculate_moon_time_modifier("full", TimeOfDay.DAY) == 0.75
+
+    def test_first_quarter_evening_night_boost(self):
+        assert calculate_moon_time_modifier("waxing", TimeOfDay.EVENING) == 1.15
+        assert calculate_moon_time_modifier("waxing", TimeOfDay.NIGHT) == 1.15
+
+    def test_last_quarter_morning_boost(self):
+        assert calculate_moon_time_modifier("waning", TimeOfDay.MORNING) == 1.15
+
+    def test_full_moon_night_nocturnal_fish(self):
+        assert (
+            calculate_moon_time_modifier(
+                "full", TimeOfDay.NIGHT, preference="full_moon"
+            )
+            == 1.20
+        )
+
+    def test_full_moon_night_neutral_fish(self):
+        assert (
+            calculate_moon_time_modifier("full", TimeOfDay.NIGHT, preference="neutral")
+            == 1.00
+        )
+
+    def test_unknown_region_fallback(self):
+        assert calculate_moon_time_modifier("unknown", TimeOfDay.DAY) == 1.10
+
+    def test_all_combinations_in_reasonable_range(self):
+        for region in ["new", "waxing", "full", "waning"]:
+            for tod in TimeOfDay:
+                mod = calculate_moon_time_modifier(region, tod)
+                assert 0.5 <= mod <= 1.3
+
+
+class TestBiteScoreMoonTimeCoupling:
+    def test_full_moon_day_lower_than_new_moon_day(self, fish_settings):
+        weather_full_day = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("3"),
+            wind_direction=180,
+            cloudiness=50,
+            precipitation_mm=Decimal("0"),
+            moon_phase=Decimal("0.5"),
+            moon_phase_region="full",
+            moon_days_to_nearest_phase=0.0,
+            sunrise=time(7, 0),
+            sunset=time(18, 0),
+        )
+        weather_new_day = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("3"),
+            wind_direction=180,
+            cloudiness=50,
+            precipitation_mm=Decimal("0"),
+            moon_phase=Decimal("0.0"),
+            moon_phase_region="new",
+            moon_days_to_nearest_phase=0.0,
+            sunrise=time(7, 0),
+            sunset=time(18, 0),
+        )
+        result_full = calculate_bite_score(
+            weather_full_day,
+            fish_settings,
+            hour=13,
+            month=6,
+            check_date=date(2025, 6, 15),
+        )
+        result_new = calculate_bite_score(
+            weather_new_day,
+            fish_settings,
+            hour=13,
+            month=6,
+            check_date=date(2025, 6, 15),
+        )
+        assert result_new["bite_score"] > result_full["bite_score"]
+
+    def test_moon_time_factor_in_details(self, fish_settings):
+        weather = WeatherConditions(
+            temperature=Decimal("15"),
+            pressure_hpa=1013,
+            wind_speed=Decimal("3"),
+            moon_phase=Decimal("0.5"),
+            moon_phase_region="full",
+            sunrise=time(7, 0),
+            sunset=time(18, 0),
+        )
+        result = calculate_bite_score(
+            weather, fish_settings, hour=13, month=6, check_date=date(2025, 6, 15)
+        )
+        assert "moon_time_factor" in result["calculation_details"]
+        assert result["calculation_details"]["moon_time_factor"] == 0.75

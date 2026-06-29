@@ -44,12 +44,37 @@ MOON_PHASE_NAMES = [
     (0.9375, 1.001, "Новолуние"),
 ]
 
+SYNODIC_DAYS = 29.53
+
 
 def _get_phase_name(phase: float) -> str:
     for low, high, name in MOON_PHASE_NAMES:
         if low <= phase < high:
             return name
     return "Новолуние"
+
+
+def classify_moon_phase(phase: float) -> str:
+    p = float(phase) % 1.0
+    if p < 0.125 or p >= 0.875:
+        return "new"
+    if p < 0.375:
+        return "waxing"
+    if p < 0.625:
+        return "full"
+    return "waning"
+
+
+def days_to_nearest_transition(
+    next_new_moon_days: float,
+    next_full_moon_days: float,
+    synodic: float = SYNODIC_DAYS,
+) -> float:
+    to_new = min(max(0.0, next_new_moon_days), max(0.0, synodic - next_new_moon_days))
+    to_full = min(
+        max(0.0, next_full_moon_days), max(0.0, synodic - next_full_moon_days)
+    )
+    return max(0.0, min(to_new, to_full))
 
 
 def calculate_moon_phase(target_date: date, lat: float, lon: float) -> MoonData:

@@ -52,13 +52,15 @@ from app.services.moon_calculation import (
     calculate_solunar_periods,
     get_solunar_periods_for_hour,
     is_time_in_solunar_period,
+    classify_moon_phase,
+    days_to_nearest_transition,
 )
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/forecast", tags=["forecast"])
 
 CACHE_TTL = 3600
-ALGORITHM_VERSION = "v5"
+ALGORITHM_VERSION = "v6"
 
 
 def _build_fish_settings(fish_settings, climate_zone: str) -> FishSettings:
@@ -367,6 +369,24 @@ async def get_forecast(
             region_id=str(region_id),
         )
 
+    if moon_data is not None:
+        logger.info(
+            "Moon context resolved",
+            service="forecast-service",
+            action="get_forecast",
+            region_id=str(region_id),
+            forecast_date=str(forecast_date),
+            phase=round(float(moon_data.phase), 4),
+            phase_name=moon_data.phase_name,
+            phase_region=classify_moon_phase(float(moon_data.phase)),
+            days_to_nearest_phase=round(
+                days_to_nearest_transition(
+                    moon_data.next_new_moon_days, moon_data.next_full_moon_days
+                ),
+                2,
+            ),
+        )
+
     yesterday_result = await db.execute(
         select(WeatherData)
         .where(
@@ -533,6 +553,7 @@ async def get_forecast(
                         solunar_data,
                         list(hour_ranges[tod]),
                         precip_7d,
+                        moon_data,
                     )
 
                     fish_settings_obj = _build_fish_settings(fish_settings, climate_zone)
@@ -711,6 +732,7 @@ async def get_forecast(
                         solunar_data,
                         list(hour_ranges[tod]),
                         precip_7d,
+                        moon_data,
                     )
 
                     fish_settings_obj = _build_fish_settings(custom_settings, climate_zone)
@@ -888,6 +910,7 @@ def _get_average_weather(
     solunar_data=None,
     hour_range: list = None,
     precip_7d: Decimal = None,
+    moon_data=None,
 ) -> WeatherConditions:
     if not weather_records:
         return WeatherConditions()
@@ -936,6 +959,17 @@ def _get_average_weather(
         from collections import Counter
         weather_condition = Counter(conditions).most_common(1)[0][0]
 
+    moon_phase_value = moons[0] if moons else None
+    moon_phase_region = None
+    moon_days_to_nearest = None
+    if moon_data is not None:
+        moon_phase_region = classify_moon_phase(float(moon_data.phase))
+        moon_days_to_nearest = days_to_nearest_transition(
+            moon_data.next_new_moon_days, moon_data.next_full_moon_days
+        )
+    elif moon_phase_value is not None:
+        moon_phase_region = classify_moon_phase(float(moon_phase_value))
+
     return WeatherConditions(
         temperature=Decimal(str(sum(temps) / len(temps))) if temps else None,
         water_temperature=Decimal(str(round(sum(water_temps) / len(water_temps), 1))) if water_temps else None,
@@ -945,7 +979,7 @@ def _get_average_weather(
         wind_gust=Decimal(str(sum(gusts) / len(gusts))) if gusts else None,
         cloudiness=int(sum(clouds) / len(clouds)) if clouds else None,
         precipitation_mm=Decimal(str(sum(precips))) if precips else Decimal("0"),
-        moon_phase=Decimal(str(moons[0])) if moons else None,
+        moon_phase=Decimal(str(moon_phase_value)) if moon_phase_value is not None else None,
         sunrise=first.sunrise,
         sunset=first.sunset,
         pressure_trend_data=pressure_trend_data,
@@ -957,6 +991,8 @@ def _get_average_weather(
         humidity=first.humidity,
         visibility_m=first.visibility_m,
         precip_7d=precip_7d,
+        moon_phase_region=moon_phase_region,
+        moon_days_to_nearest_phase=moon_days_to_nearest,
     )
 
 

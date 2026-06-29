@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from app.core.logging_config import get_logger
+from app.services.moon_calculation import classify_moon_phase
 
 logger = get_logger(__name__)
 
@@ -59,6 +60,8 @@ class WeatherConditions:
     humidity: Optional[int] = None
     visibility_m: Optional[int] = None
     precip_7d: Optional[Decimal] = None
+    moon_phase_region: Optional[str] = None
+    moon_days_to_nearest_phase: Optional[float] = None
 
 
 @dataclass
@@ -430,6 +433,80 @@ def calculate_turbidity_score(
     return max(0.0, min(100.0, turbidity_score))
 
 
+MOON_PHASE_BASE_RATINGS = {
+    0.0: 90.0,
+    0.25: 80.0,
+    0.5: 45.0,
+    0.75: 78.0,
+}
+SYNODIC_DAYS = 29.53
+
+MOON_TIME_MODIFIERS = {
+    "new": {"morning": 1.10, "day": 1.10, "evening": 1.05, "night": 0.90},
+    "waxing": {"morning": 1.00, "day": 0.95, "evening": 1.15, "night": 1.15},
+    "full": {"morning": 0.80, "day": 0.75, "evening": 1.00, "night": 1.00},
+    "waning": {"morning": 1.15, "day": 1.05, "evening": 1.00, "night": 0.95},
+}
+
+
+def _phase_base_rating(phase: float) -> float:
+    p = phase % 1.0
+    if p >= 0.75:
+        low, high = 0.75, 1.0
+        r_low, r_high = MOON_PHASE_BASE_RATINGS[0.75], MOON_PHASE_BASE_RATINGS[0.0]
+    elif p >= 0.5:
+        low, high = 0.5, 0.75
+        r_low, r_high = MOON_PHASE_BASE_RATINGS[0.5], MOON_PHASE_BASE_RATINGS[0.75]
+    elif p >= 0.25:
+        low, high = 0.25, 0.5
+        r_low, r_high = MOON_PHASE_BASE_RATINGS[0.25], MOON_PHASE_BASE_RATINGS[0.5]
+    else:
+        low, high = 0.0, 0.25
+        r_low, r_high = MOON_PHASE_BASE_RATINGS[0.0], MOON_PHASE_BASE_RATINGS[0.25]
+
+    t = (p - low) / (high - low)
+    return r_low + (r_high - r_low) * t
+
+
+def _days_to_nearest_phase_from_value(phase: float) -> float:
+    p = phase % 1.0
+    dist_new = min(p, 1.0 - p)
+    dist_full = abs(p - 0.5)
+    return min(dist_new, dist_full) * SYNODIC_DAYS
+
+
+def _activity_window_bonus(days_to_phase: float) -> float:
+    if days_to_phase <= 3.0:
+        return 15.0
+    if days_to_phase >= 6.0:
+        return 0.0
+    return 15.0 * (6.0 - days_to_phase) / 3.0
+
+
+def _preference_adjustment(phase: float, preference: str) -> float:
+    p = phase % 1.0
+    dist_new = min(p, 1.0 - p)
+    dist_full = abs(p - 0.5)
+
+    if preference == "new_moon":
+        return max(0.0, 15.0 - dist_new * 60.0)
+    if preference == "full_moon":
+        return max(0.0, 15.0 - dist_full * 60.0)
+    if preference == "both":
+        return max(0.0, 10.0 - min(dist_new, dist_full) * 40.0)
+    return 0.0
+
+
+def calculate_moon_time_modifier(
+    phase_region: str, time_of_day: TimeOfDay, preference: str = "neutral"
+) -> float:
+    region_mods = MOON_TIME_MODIFIERS.get(phase_region, MOON_TIME_MODIFIERS["new"])
+    modifier = region_mods.get(time_of_day.value, 1.0)
+    if phase_region == "full" and time_of_day == TimeOfDay.NIGHT:
+        modifier = 1.20 if preference == "full_moon" else 1.00
+    return modifier
+
+
 def calculate_moon_score(
     weather: WeatherConditions, fish: FishSettings, season: str = "summer"
 ) -> float:
@@ -439,28 +516,19 @@ def calculate_moon_score(
     phase = float(weather.moon_phase)
     sensitivity = float(fish.moon_sensitivity)
 
-    dist_new = min(abs(phase - 0.0), abs(phase - 1.0))
-    dist_full = abs(phase - 0.5)
+    region = weather.moon_phase_region or classify_moon_phase(phase)
 
-    preference = fish.moon_phase_preference
+    base_rating = _phase_base_rating(phase)
 
-    if preference == "new_moon":
-        phase_score = 100.0 - dist_new * 300
-        bonus = (1.0 - min(dist_new, 0.5)) * 20
-    elif preference == "full_moon":
-        phase_score = 100.0 - dist_full * 300
-        bonus = (1.0 - min(dist_full, 0.5)) * 20
-    elif preference == "both":
-        min_dist = min(dist_new, dist_full)
-        phase_score = 100.0 - min_dist * 300
-        bonus = (1.0 - min(min_dist, 0.5)) * 15
+    if weather.moon_days_to_nearest_phase is not None:
+        days_to_phase = float(weather.moon_days_to_nearest_phase)
     else:
-        distances = [dist_new, dist_full]
-        min_distance = min(distances)
-        phase_score = 100.0 - min_distance * 300
-        bonus = 0.0
+        days_to_phase = _days_to_nearest_phase_from_value(phase)
+    window_bonus = _activity_window_bonus(days_to_phase)
 
-    phase_score = max(10.0, min(100.0, phase_score))
+    preference_adj = _preference_adjustment(phase, fish.moon_phase_preference)
+
+    raw = base_rating + window_bonus + preference_adj
 
     season_mult = {
         "spring": 1.0,
@@ -471,12 +539,25 @@ def calculate_moon_score(
 
     effective_sensitivity = min(1.0, sensitivity * season_mult)
 
-    base = 50.0 + (phase_score - 50.0) * effective_sensitivity + bonus * effective_sensitivity
+    base = 50.0 + (raw - 50.0) * effective_sensitivity
 
     if weather.is_solunar_major:
         base = min(100.0, base + 20 * weather.solunar_strength)
     elif weather.is_solunar_minor:
         base = min(100.0, base + 10 * weather.solunar_strength)
+
+    logger.debug(
+        "moon_score_calculated",
+        service="forecast-service",
+        action="calculate_moon_score",
+        phase=round(phase, 4),
+        phase_region=region,
+        days_to_phase=round(days_to_phase, 2),
+        base_rating=round(base_rating, 2),
+        window_bonus=round(window_bonus, 2),
+        preference_adj=round(preference_adj, 2),
+        moon_score=round(max(0.0, min(100.0, base)), 2),
+    )
 
     return max(0.0, min(100.0, base))
 
@@ -718,6 +799,18 @@ def calculate_bite_score(
     elif weather.is_solunar_minor:
         time_adjusted = min(100.0, time_adjusted * 1.10)
 
+    if weather.moon_phase is not None:
+        moon_region = weather.moon_phase_region or classify_moon_phase(
+            float(weather.moon_phase)
+        )
+    else:
+        moon_region = None
+    moon_time_factor = 1.0
+    if moon_region:
+        moon_time_factor = calculate_moon_time_modifier(
+            moon_region, time_of_day, fish.moon_phase_preference
+        )
+
     trend_data = weather.pressure_trend_data
     if trend_data:
         stability_mult = 0.85 + 0.15 * trend_data.stability
@@ -743,6 +836,7 @@ def calculate_bite_score(
 
     bite_score = base * solunar_synergy * temp_pressure_synergy * stability_mult
     bite_score = bite_score * (time_adjusted / 100.0) * wind_cap * precip_cap
+    bite_score = bite_score * moon_time_factor
     bite_score = bite_score * uv_cap * turbidity_cap * water_level_cap
     bite_score = bite_score * phase_mult
 
@@ -775,6 +869,7 @@ def calculate_bite_score(
             "temp_pressure_synergy": round(temp_pressure_synergy, 3),
             "stability_mult": round(stability_mult, 3),
             "time_adjusted": round(time_adjusted, 1),
+            "moon_time_factor": round(moon_time_factor, 3),
             "wind_cap": round(wind_cap, 3),
             "precip_cap": round(precip_cap, 3),
             "uv_cap": round(uv_cap, 3),
@@ -849,10 +944,30 @@ def generate_recommendation(
 
     if weather.moon_phase is not None:
         phase = float(weather.moon_phase)
-        if phase < 0.1 or phase > 0.9:
-            recommendations.append("Новолуние — ночная рыбалка может быть очень удачной.")
-        elif 0.4 < phase < 0.6:
-            recommendations.append("Полнолуние — рыба может кормиться всю ночь.")
+        region = weather.moon_phase_region or classify_moon_phase(phase)
+        if region == "new":
+            recommendations.append(
+                "Новолуние — стабильный дневной клёв, лучшие часы на утренних и вечерних зорях."
+            )
+        elif region == "waxing":
+            recommendations.append(
+                "Растущая луна (первая четверть) — хороший вечерний и ночной клёв, особенно хищника."
+            )
+        elif region == "full":
+            recommendations.append(
+                "Полнолуние — днём рыба часто осторожна и перекормлена; ловите на зорях и ночью в глубоких местах."
+            )
+        elif region == "waning":
+            recommendations.append(
+                "Убывающая луна (последняя четверть) — активный утренний клёв, часто до полудня."
+            )
+
+        if weather.moon_days_to_nearest_phase is not None and float(
+            weather.moon_days_to_nearest_phase
+        ) <= 3.0:
+            recommendations.append(
+                "Окно активности: рядом с переходом фазы Луны — возможны выходы жора."
+            )
 
     if weather.is_solunar_major:
         recommendations.append("Solunar major period — пиковая активность рыбы.")

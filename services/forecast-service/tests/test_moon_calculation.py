@@ -12,6 +12,8 @@ from app.services.moon_calculation import (
     is_time_in_solunar_period,
     _get_phase_name,
     _time_in_range,
+    classify_moon_phase,
+    days_to_nearest_transition,
 )
 
 MOSCOW_LAT = 55.7558
@@ -216,3 +218,60 @@ class TestTimeInRange:
     def test_boundary(self):
         assert _time_in_range(time(10, 0), time(10, 0), time(12, 0)) is True
         assert _time_in_range(time(12, 0), time(10, 0), time(12, 0)) is True
+
+
+class TestClassifyMoonPhase:
+    @pytest.mark.parametrize(
+        "phase,expected",
+        [
+            (0.0, "new"),
+            (0.05, "new"),
+            (0.12, "new"),
+            (0.125, "waxing"),
+            (0.2, "waxing"),
+            (0.25, "waxing"),
+            (0.374, "waxing"),
+            (0.375, "full"),
+            (0.5, "full"),
+            (0.624, "full"),
+            (0.625, "waning"),
+            (0.75, "waning"),
+            (0.874, "waning"),
+            (0.875, "new"),
+            (0.95, "new"),
+            (0.99, "new"),
+        ],
+    )
+    def test_classification(self, phase, expected):
+        assert classify_moon_phase(phase) == expected
+
+    def test_wraps_around_one(self):
+        assert classify_moon_phase(1.0) == "new"
+        assert classify_moon_phase(1.25) == "waxing"
+        assert classify_moon_phase(1.5) == "full"
+
+
+class TestDaysToNearestTransition:
+    def test_on_new_moon(self):
+        days = days_to_nearest_transition(29.5, 14.7)
+        assert days < 0.5
+
+    def test_on_full_moon(self):
+        days = days_to_nearest_transition(14.76, 29.5)
+        assert days < 0.5
+
+    def test_at_quarter(self):
+        days = days_to_nearest_transition(7.38, 7.38)
+        assert 6.5 < days < 8.0
+
+    def test_two_days_before_new(self):
+        days = days_to_nearest_transition(2.0, 12.7)
+        assert abs(days - 2.0) < 0.1
+
+    def test_two_days_after_new(self):
+        days = days_to_nearest_transition(27.5, 12.7)
+        assert abs(days - 2.0) < 0.1
+
+    def test_never_negative(self):
+        days = days_to_nearest_transition(0.0, 0.0)
+        assert days >= 0
