@@ -22,6 +22,10 @@ export const API_ENDPOINTS = {
     FAVORITES: `${API_URL}/api/v1/places/favorites`,
     FAVORITE_BY_PLACE_ID: (placeId: string) => `${API_URL}/api/v1/places/favorites/${placeId}`,
   },
+  CATCHES: {
+    LIST: `${API_URL}/api/v1/catches`,
+    BY_ID: (id: string) => `${API_URL}/api/v1/catches/${id}`,
+  },
 };
 
 export default API_URL;

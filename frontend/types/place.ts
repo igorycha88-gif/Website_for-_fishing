@@ -81,3 +81,38 @@ export interface PlaceUpdate {
   visibility?: "private" | "public";
   images?: string[];
 }
+
+export interface CatchPoint {
+  id: string;
+  latitude: number;
+  longitude: number;
+  fish_type: FishType;
+  river: "volga" | "oka";
+  name: string;
+  description?: string;
+  season?: string[];
+  depth?: number | null;
+  bait?: string;
+  weight_avg?: number | null;
+  is_demo: boolean;
+  source_label?: string;
+  created_at: string;
+}
+
+export interface CatchPointListResponse {
+  catches: CatchPoint[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface CatchPointFilters {
+  river?: "volga" | "oka";
+  fish_type_id?: string;
+  min_lat?: number;
+  min_lon?: number;
+  max_lat?: number;
+  max_lon?: number;
+  page?: number;
+  page_size?: number;
+}

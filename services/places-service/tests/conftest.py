@@ -32,6 +32,7 @@ async def db():
 
         try:
             await session.execute(text("DELETE FROM favorite_places"))
+            await session.execute(text("DELETE FROM catch_points"))
             await session.execute(text("DELETE FROM fish_types"))
             await session.execute(text("DELETE FROM equipment_types"))
             await session.execute(text("DELETE FROM places"))

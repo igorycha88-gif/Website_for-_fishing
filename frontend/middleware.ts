@@ -7,6 +7,7 @@ const SERVICES: Record<string, string> = {
   '/api/v1/users': process.env.AUTH_SERVICE_URL || 'http://auth-service:8000',
   '/api/v1/maps': process.env.AUTH_SERVICE_URL || 'http://auth-service:8000',
   '/api/v1/places': process.env.PLACES_SERVICE_URL || 'http://places-service:8001',
+  '/api/v1/catches': process.env.PLACES_SERVICE_URL || 'http://places-service:8001',
   '/api/v1/reports': process.env.REPORTS_SERVICE_URL || 'http://reports-service:8002',
   '/api/v1/booking': process.env.BOOKING_SERVICE_URL || 'http://booking-service:8003',
   '/api/v1/shop': process.env.SHOP_SERVICE_URL || 'http://shop-service:8004',

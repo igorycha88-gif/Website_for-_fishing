@@ -290,3 +290,30 @@ CREATE INDEX idx_catch_reports_user ON user_catch_reports(user_id);
 CREATE INDEX idx_catch_reports_region_fish ON user_catch_reports(region_id, fish_type_id);
 CREATE INDEX idx_catch_reports_date ON user_catch_reports(forecast_date);
 CREATE INDEX idx_catch_reports_created ON user_catch_reports(created_at);
+
+-- ============================================
+-- CATCH POINTS (рыбные точки на реках)
+-- ============================================
+
+CREATE TABLE catch_points (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    latitude NUMERIC(10, 8) NOT NULL,
+    longitude NUMERIC(11, 8) NOT NULL,
+    fish_type_id UUID NOT NULL REFERENCES fish_types(id) ON DELETE CASCADE,
+    river VARCHAR(20) NOT NULL CHECK (river IN ('volga', 'oka')),
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    season VARCHAR(20)[],
+    depth NUMERIC(6, 2),
+    bait VARCHAR(200),
+    weight_avg NUMERIC(6, 2),
+    is_demo BOOLEAN DEFAULT true,
+    source_label VARCHAR(100) DEFAULT 'Демонстрационные данные',
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_catch_points_river ON catch_points(river);
+CREATE INDEX idx_catch_points_fish ON catch_points(fish_type_id);
+CREATE INDEX idx_catch_points_active ON catch_points(is_active);
+CREATE INDEX idx_catch_points_coords ON catch_points(latitude, longitude);

@@ -34,6 +34,10 @@ const nextConfig = {
         destination: `${placesHost}/api/v1/places/:path*`,
       },
       {
+        source: '/api/v1/catches/:path*',
+        destination: `${placesHost}/api/v1/catches/:path*`,
+      },
+      {
         source: '/api/v1/reports/:path*',
         destination: `${reportsHost}/api/v1/reports/:path*`,
       },

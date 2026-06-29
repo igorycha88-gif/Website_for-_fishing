@@ -18,6 +18,7 @@ from app.schemas.place import (
     PlaceListResponse,
     FishTypeInPlace,
 )
+from app.schemas.catch_point import CatchPointResponse, CatchPointListResponse
 
 __all__ = [
     "FishTypeBase",
@@ -34,4 +35,6 @@ __all__ = [
     "PlaceResponse",
     "PlaceListResponse",
     "FishTypeInPlace",
+    "CatchPointResponse",
+    "CatchPointListResponse",
 ]

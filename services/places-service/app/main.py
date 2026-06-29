@@ -13,6 +13,13 @@ logger = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting places-service", service="places-service")
+    from app.core.database import Base, database
+    from app import models  # noqa: F401 — ensure all models registered on Base
+
+    async with database.engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database tables ensured", service="places-service")
+
     async for db in get_db():
         await seed_all()
         break

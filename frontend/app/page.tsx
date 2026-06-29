@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Hero } from "@/components/Hero";
+import { HomeCatchMap } from "@/components/HomeCatchMap";
 import { MapPin, TrendingUp, Phone, Mail, Fish, Loader2 } from "lucide-react";
 import { useForecast } from "@/hooks/useForecast";
 import {
@@ -262,6 +263,8 @@ export default function Home() {
           <ForecastPreview />
         </div>
       </section>
+
+      <HomeCatchMap />
 
       <section className="py-20 bg-primary-deepBlue text-white">
         <div className="container mx-auto px-4">

@@ -16,15 +16,17 @@ import NotificationsTab from "./components/NotificationsTab";
 import ReportsTab from "./components/ReportsTab";
 import BookingsTab from "./components/BookingsTab";
 import ForecastTab from "./components/ForecastTab";
+import CatchPointsTab from "./components/CatchPointsTab";
 // SHOP-HIDE: скрыто до появления юр. лица — CartTab, OrdersTab, BookingsTab
 import { API_ENDPOINTS } from "@/app/lib/api";
 
-type TabType = "profile" | "settings" | "my-places" | "forecast" | "cart" | "orders" | "notifications" | "reports" | "bookings";
+type TabType = "profile" | "settings" | "my-places" | "catch-points" | "forecast" | "cart" | "orders" | "notifications" | "reports" | "bookings";
 // SHOP-HIDE: скрыто до появления юр. лица — "cart" | "orders" | "bookings"
 
 const tabs = [
   { id: "profile" as TabType, label: "Профиль", icon: User },
   { id: "my-places" as TabType, label: "Мои места", icon: MapPin },
+  { id: "catch-points" as TabType, label: "Рыбные точки", icon: Fish },
   { id: "forecast" as TabType, label: "Прогноз клева", icon: Fish },
   // SHOP-HIDE: скрыто до появления юр. лица
   // { id: "cart" as TabType, label: "Корзина", icon: ShoppingCart },
@@ -104,6 +106,8 @@ export default function ProfilePage() {
         return <SettingsTab />;
       case "my-places":
         return <MyPlacesTab />;
+      case "catch-points":
+        return <CatchPointsTab />;
       case "forecast":
         return <ForecastTab />;
       // SHOP-HIDE: скрыто до появления юр. лица

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { Map, Placemark, YMaps, Clusterer } from "@pbe/react-yandex-maps";
-import { Place } from "@/types/place";
+import { Place, CatchPoint } from "@/types/place";
 import { Navigation } from "lucide-react";
 import LayersPanel from "./LayersPanel";
 import DepthPopup from "./DepthPopup";
@@ -32,6 +32,8 @@ interface YandexMapProps {
   onFavoriteClick?: (placeId: string) => void;
   tempMarker?: { lat: number; lon: number } | null;
   showDepthPanel?: boolean;
+  catchPoints?: CatchPoint[];
+  onCatchClick?: (catchPoint: CatchPoint) => void;
 }
 
 const YANDEX_API_KEY = process.env.NEXT_PUBLIC_YANDEX_MAPS_API_KEY;
@@ -191,6 +193,47 @@ const GuestTooltip: React.FC<{ place: Place; onLogin: () => void }> = ({ place, 
   );
 };
 
+const SEASON_LABELS: Record<string, string> = {
+  spring: "Весна",
+  summer: "Лето",
+  autumn: "Осень",
+  winter: "Зима",
+};
+
+const RIVER_LABELS: Record<string, string> = {
+  volga: "Волга",
+  oka: "Ока",
+};
+
+const escapeHtml = (s: string): string =>
+  String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const buildCatchBalloon = (cp: CatchPoint): string => {
+  const seasons = (cp.season || []).map((s) => SEASON_LABELS[s] || s).join(", ");
+  return `<div style="padding:6px;min-width:220px;max-width:280px;font-family:inherit;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+      <span style="font-size:24px;">${escapeHtml(cp.fish_type.icon || "🐟")}</span>
+      <div>
+        <div style="font-weight:700;font-size:16px;color:#0f172a;">${escapeHtml(cp.fish_type.name)}</div>
+        <div style="font-size:12px;color:#64748b;">${escapeHtml(cp.name)} • ${RIVER_LABELS[cp.river] || cp.river}</div>
+      </div>
+    </div>
+    ${cp.description ? `<p style="margin:0 0 6px 0;font-size:13px;color:#334155;">${escapeHtml(cp.description)}</p>` : ""}
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font-size:12px;color:#475569;">
+      ${seasons ? `<span style="color:#64748b;">Сезон:</span><span>${seasons}</span>` : ""}
+      ${cp.depth != null ? `<span style="color:#64748b;">Глубина:</span><span>${Number(cp.depth).toFixed(1)} м</span>` : ""}
+      ${cp.bait ? `<span style="color:#64748b;">Снасть:</span><span>${escapeHtml(cp.bait)}</span>` : ""}
+      ${cp.weight_avg != null ? `<span style="color:#64748b;">Ср. вес:</span><span>${Number(cp.weight_avg).toFixed(1)} кг</span>` : ""}
+      <span style="color:#64748b;">Координаты:</span><span>${Number(cp.latitude).toFixed(5)}, ${Number(cp.longitude).toFixed(5)}</span>
+    </div>
+    <div style="margin-top:6px;font-size:11px;color:#f97316;font-weight:600;">⭐ Демонстрационные данные</div>
+  </div>`;
+};
+
 export default function YandexMap({
   city,
   blurred = false,
@@ -205,6 +248,8 @@ export default function YandexMap({
   onFavoriteClick,
   tempMarker,
   showDepthPanel = false,
+  catchPoints = [],
+  onCatchClick,
 }: YandexMapProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -220,6 +265,7 @@ export default function YandexMap({
   });
   const [depthPopupPos, setDepthPopupPos] = useState<{ x: number; y: number } | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [fishIconLayout, setFishIconLayout] = useState<any>(null);
   const mapReadySetRef = useRef(false);
 
   const mapRef = useRef<any>(null);
@@ -239,6 +285,18 @@ export default function YandexMap({
       setMapReady(true);
     }
   }, []);
+
+  useEffect(() => {
+    const ymaps = (window as any).ymaps;
+    if (!ymaps || !fishIconLayout) {
+      if (ymaps && !fishIconLayout) {
+        const layout = ymaps.templateLayoutFactory.createClass(
+          `<div style="width:38px;height:38px;border-radius:50% 50% 50% 0;background:#fff;border:2px solid #f97316;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 2px 6px rgba(0,0,0,0.3);transform:rotate(-45deg);">$[properties.iconContent]</div>`
+        );
+        setFishIconLayout(layout);
+      }
+    }
+  }, [fishIconLayout]);
 
   useEffect(() => {
     console.log('[YandexMap] Component mounted, loading:', loading, 'places:', places.length);
@@ -607,6 +665,44 @@ export default function YandexMap({
               />
             ))}
           </Clusterer>
+          {catchPoints.length > 0 && (
+            <Clusterer
+              options={{
+                preset: "islands#orangeClusterIcons",
+                groupByCoordinates: false,
+                clusterDisableClickZooming: false,
+                clusterIconCaptionMaxWidth: 120,
+              }}
+            >
+              {catchPoints.map((cp) => (
+                <Placemark
+                  key={`catch-${cp.id}`}
+                  geometry={[Number(cp.latitude), Number(cp.longitude)]}
+                  properties={{
+                    iconContent: cp.fish_type.icon || "🐟",
+                    hintContent: `${cp.fish_type.icon || "🐟"} ${cp.fish_type.name} — ${cp.name}`,
+                    balloonContent: buildCatchBalloon(cp),
+                  }}
+                  options={
+                    fishIconLayout
+                      ? ({
+                          iconLayout: fishIconLayout,
+                          iconShape: {
+                            type: "Circle",
+                            coordinates: [0, 0],
+                            radius: 20,
+                          },
+                        } as any)
+                      : {
+                          preset: "islands#orangeCircleDotIcon",
+                          iconColor: "#f97316",
+                        }
+                  }
+                  onClick={() => onCatchClick?.(cp)}
+                />
+              ))}
+            </Clusterer>
+          )}
           {tempMarker && (
             <Placemark
               geometry={[tempMarker.lat, tempMarker.lon]}

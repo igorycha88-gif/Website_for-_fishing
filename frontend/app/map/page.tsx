@@ -2,49 +2,48 @@
 
 import { useAuthStore } from "@/app/stores/useAuthStore";
 import YandexMap from "@/components/YandexMap";
-import { MapPin } from "lucide-react";
+import { MapPin, Fish } from "lucide-react";
 import { useState, useEffect } from "react";
-import { Place } from "@/types/place";
+import { Place, CatchPoint } from "@/types/place";
+import { useCatches } from "@/hooks/useCatches";
 
 export default function MapPage() {
   const { isAuthenticated, user } = useAuthStore();
   const [places, setPlaces] = useState<Place[]>([]);
+  const [catchPoints, setCatchPoints] = useState<CatchPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const { getCatches } = useCatches();
 
   const handleRegisterClick = () => {
     window.location.href = "/register";
   };
 
   useEffect(() => {
-    const fetchPlaces = async () => {
+    const fetchAll = async () => {
       try {
         setLoading(true);
         const endpoint = isAuthenticated ? "/api/v1/places" : "/api/v1/places?visibility=public";
-        
-        console.log('[MapPage] Fetching places:', { endpoint, isAuthenticated });
-        
-        const response = await fetch(endpoint, {
-          headers: isAuthenticated ? {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          } : {},
-        });
 
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[MapPage] Places loaded:', { count: data.places?.length || 0, total: data.total });
-          setPlaces(data.places || []);
-        } else {
-          console.error('[MapPage] Failed to fetch places:', response.status, response.statusText);
-        }
+        const [placesResp, catchesResp] = await Promise.all([
+          fetch(endpoint, {
+            headers: isAuthenticated
+              ? { Authorization: `Bearer ${localStorage.getItem("token")}` }
+              : {},
+          }).then((r) => (r.ok ? r.json() : { places: [] })),
+          getCatches(),
+        ]);
+
+        setPlaces(placesResp.places || []);
+        setCatchPoints(catchesResp.catches || []);
       } catch (error) {
-        console.error('[MapPage] Failed to load places:', error);
+        console.error("[MapPage] Failed to load data:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchPlaces();
-  }, [isAuthenticated]);
+    fetchAll();
+  }, [isAuthenticated, getCatches]);
 
   return (
     <div className="min-h-screen bg-gray-50 pt-20">
@@ -61,6 +60,14 @@ export default function MapPage() {
                 : "Укажите ваш город в настройках для персонализации карты"
               : "Исследуйте публичные места рыбалки на интерактивной карте"}
           </p>
+          {catchPoints.length > 0 && (
+            <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
+              <Fish className="w-4 h-4 text-orange-500" />
+              <span>
+                На карте {catchPoints.length} рыбных точек (Волга и Ока) — нажмите на значок рыбы
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden h-[600px]">
@@ -69,6 +76,7 @@ export default function MapPage() {
             isAuthenticated={isAuthenticated}
             onRegisterClick={handleRegisterClick}
             places={places}
+            catchPoints={catchPoints}
             showDepthPanel={true}
             onAddPlaceClick={isAuthenticated ? (coords) => {
               window.location.href = `/profile?lat=${coords.lat}&lon=${coords.lon}`;
