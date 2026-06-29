@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.0] - 2026-06-29
+
+### Добавлено
+- feat(depth): интеграция российских гидрографических данных (ГВР + OSM) (a40cc26)
+- feat(depth): слой глубин на карте — areas, labels, tiles + fix mapRef (21b84ac)
+- feat(catches): точки улова на карте — модель/API places-service, хук useCatches, HomeCatchMap, e2e (0815822)
+- feat(forecast): алгоритм клёва v6 — влияние Луны (фаза×время суток, окно активности ±3 дня) (b1c4edd)
+
+### Безопасность
+- fix(security): привязка Next.js к 127.0.0.1 — закрытие наружного порта 3000 (INC-SEC-001) (e627936)
+
+### Исправлено
+- fix(ci): исключить e2e/ из Jest testPathIgnorePatterns — Jest падал на Playwright-тестах (d1fd7f8)
+
 ## [1.2.5] - 2026-06-11
 
 ### Исправлено
